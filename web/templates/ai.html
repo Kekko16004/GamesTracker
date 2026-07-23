@@ -5,21 +5,257 @@
 {% block content %}
 <div class="page-header">
   <div class="page-header__titles">
-    <h1 class="page-header__h1">AI Copilot</h1>
-    <p class="page-header__sub">Intelligent analysis and recommendations &mdash; coming soon</p>
+    <h1 class="page-header__h1">🤖 AI Copilot</h1>
+    <p class="page-header__sub">Data-driven game marketing assistant — powered by {{ context_games }} tracked games</p>
   </div>
 </div>
 
-<div class="empty-state">
-  <div class="empty-state__icon">&#x1F916;</div>
-  <h3 class="empty-state__title">AI Copilot is on the way</h3>
-  <p class="empty-state__sub">
-    The AI Copilot will surface actionable insights &mdash; which games to investigate, genre
-    opportunities, growth anomalies and more. Check back soon.
-  </p>
-  <div style="display: flex; gap: 12px; margin-top: 16px;">
-    <a href="/" class="btn btn--md btn--primary">Back to Dashboard</a>
-    <a href="/reports" class="btn btn--md btn--ghost">View Reports</a>
+<div x-data="aiCopilot()" class="ai-layout">
+  <!-- LEFT: Form -->
+  <div class="ai-form">
+    <div class="form-section">
+      <label class="form-label" for="ai-desc">Descrivi il tuo gioco</label>
+      <textarea id="ai-desc" x-model="brief.game_description" class="form-textarea" rows="7"
+        placeholder="Es: Un roguelike in pixel art dove controlli un gatto che esplora dungeon generati proceduralmente. Meccaniche: combattimento a turni, crafting, permadeath. Ambientazione medievale fantasy con toni umoristici..."></textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-section form-section--half">
+        <label class="form-label" for="ai-genre">Genere</label>
+        <select id="ai-genre" x-model="brief.genre" class="form-select">
+          <option value="">Seleziona...</option>
+          <option>RPG</option><option>Roguelike</option><option>Platformer</option>
+          <option>Puzzle</option><option>Strategy</option><option>Simulation</option>
+          <option>Horror</option><option>Adventure</option><option>Action</option>
+          <option>Survival</option><option>Racing</option><option>Visual Novel</option>
+          <option>Metroidvania</option><option>City Builder</option><option>Tower Defense</option>
+          <option>FPS</option><option>Sandbox</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-section form-section--half">
+        <label class="form-label" for="ai-art">Stile artistico</label>
+        <select id="ai-art" x-model="brief.art_style" class="form-select">
+          <option value="">Seleziona...</option>
+          <option>Pixel Art</option><option>Hand-drawn</option><option>Low Poly</option>
+          <option>Realistic 3D</option><option>Anime/Manga</option><option>Cartoon</option>
+          <option>Minimalist</option><option>Retro</option><option>Voxel</option>
+          <option>Watercolor</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <label class="form-label" for="ai-audience">Target audience</label>
+      <input id="ai-audience" x-model="brief.target_audience" class="form-input" type="text"
+        placeholder="Es: Fan di Hollow Knight, giocatori casual 25-35 anni">
+    </div>
+
+    <div class="form-section">
+      <label class="form-label" for="ai-similar">Giochi simili</label>
+      <input id="ai-similar" x-model="brief.similar_games" class="form-input" type="text"
+        placeholder="Es: Celeste, Dead Cells, Hades">
+    </div>
+
+    <button @click="generate()" :disabled="loading || !brief.game_description.trim()"
+      class="btn btn--lg btn--primary" style="width:100%; margin-top:12px;">
+      <span x-show="!loading">🚀 Genera tutto</span>
+      <span x-show="loading" class="ai-spinner-inline"></span>
+      <span x-show="loading">Generazione in corso...</span>
+    </button>
+
+    <p x-show="error" x-text="error" class="ai-error" style="margin-top:8px;"></p>
+
+    <div class="ai-config-hint" style="margin-top:16px;">
+      <p>⚙️ Configura il provider AI in <code>config/.env</code>:</p>
+      <pre style="font-size:.75rem; margin-top:4px;">AI_PROVIDER=openrouter
+AI_API_KEY=sk-or-v1-...
+AI_MODEL=anthropic/claude-sonnet-4</pre>
+    </div>
+  </div>
+
+  <!-- RIGHT: Results -->
+  <div class="ai-results">
+    <!-- Empty state -->
+    <template x-if="!result && !loading">
+      <div class="empty-state" style="margin-top:60px;">
+        <div class="empty-state__icon">🎮</div>
+        <h3 class="empty-state__title">Descrivi il tuo gioco</h3>
+        <p class="empty-state__sub">L'AI analizzerà i trend attuali e genererà descrizione Steam, titoli, prompt per immagini, tag e marketing hooks.</p>
+      </div>
+    </template>
+
+    <!-- Loading -->
+    <template x-if="loading">
+      <div class="ai-loading">
+        <div class="ai-spinner"></div>
+        <p>Analisi del mercato e generazione in corso...</p>
+        <p class="ai-loading-sub">L'AI sta analizzando i giochi di successo per darti consigli basati su dati reali</p>
+      </div>
+    </template>
+
+    <!-- Results tabs -->
+    <template x-if="result && !loading">
+      <div>
+        <div class="ai-tabs">
+          <button @click="tab='desc'" :class="{'ai-tab--active': tab==='desc'}" class="ai-tab">📝 Descrizione</button>
+          <button @click="tab='titles'" :class="{'ai-tab--active': tab==='titles'}" class="ai-tab">🎯 Titoli</button>
+          <button @click="tab='images'" :class="{'ai-tab--active': tab==='images'}" class="ai-tab">🎨 Prompt Immagini</button>
+          <button @click="tab='tags'" :class="{'ai-tab--active': tab==='tags'}" class="ai-tab">🏷️ Tag</button>
+          <button @click="tab='marketing'" :class="{'ai-tab--active': tab==='marketing'}" class="ai-tab">📢 Marketing</button>
+        </div>
+
+        <!-- Tab: Description -->
+        <div x-show="tab==='desc'" class="ai-tab-content">
+          <div class="ai-card">
+            <div class="ai-card__header">
+              <h3>Short Description <span class="ai-badge">max 300 char</span></h3>
+              <button @click="copyText(result.steam_description_short)" class="copy-btn">📋</button>
+            </div>
+            <p class="ai-desc-short" x-text="result.steam_description_short"></p>
+          </div>
+          <div class="ai-card" style="margin-top:16px;">
+            <div class="ai-card__header">
+              <h3>Long Description <span class="ai-badge">Steam format</span></h3>
+              <button @click="copyText(result.steam_description_long)" class="copy-btn">📋</button>
+            </div>
+            <div class="ai-desc-long" x-html="formatSteamBBCode(result.steam_description_long)"></div>
+          </div>
+        </div>
+
+        <!-- Tab: Titles -->
+        <div x-show="tab==='titles'" class="ai-tab-content">
+          <div class="ai-card">
+            <div class="ai-card__header">
+              <h3>10 Alternative Titles</h3>
+              <button @click="copyText(result.titles.map(t=>t.name).join('\n'))" class="copy-btn">📋 Copy all</button>
+            </div>
+            <table class="ai-titles-table">
+              <thead><tr><th>#</th><th>Titolo</th><th>Score</th><th>Motivazione</th></tr></thead>
+              <tbody>
+                <template x-for="(t, i) in result.titles" :key="i">
+                  <tr @click="copyText(t.name)" style="cursor:pointer;" title="Click to copy">
+                    <td class="mono" x-text="i+1"></td>
+                    <td class="ai-title-name" x-text="t.name"></td>
+                    <td><span class="ai-score-pill" :class="t.score>=8?'ai-score-high':t.score>=6?'ai-score-mid':'ai-score-low'" x-text="t.score+'/10'"></span></td>
+                    <td class="ai-title-reason" x-text="t.reasoning"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab: Image Prompts -->
+        <div x-show="tab==='images'" class="ai-tab-content">
+          <template x-for="(prompt, asset) in result.image_prompts" :key="asset">
+            <div class="ai-card" style="margin-bottom:12px;">
+              <div class="ai-card__header">
+                <h3 x-text="formatAssetName(asset)"></h3>
+                <button @click="copyText(prompt)" class="copy-btn">📋</button>
+              </div>
+              <pre class="ai-prompt-text" x-text="prompt"></pre>
+            </div>
+          </template>
+        </div>
+
+        <!-- Tab: Tags -->
+        <div x-show="tab==='tags'" class="ai-tab-content">
+          <div class="ai-card">
+            <div class="ai-card__header">
+              <h3>Steam Tags <span class="ai-badge" x-text="result.tags.length+' tags'"></span></h3>
+              <button @click="copyText(result.tags.join(', '))" class="copy-btn">📋 Copy all</button>
+            </div>
+            <div class="ai-tags-grid">
+              <template x-for="tag in result.tags" :key="tag">
+                <span @click="copyText(tag)" class="ai-tag-pill" title="Click to copy" x-text="tag"></span>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Marketing -->
+        <div x-show="tab==='marketing'" class="ai-tab-content">
+          <div class="ai-card ai-pitch-card">
+            <div class="ai-card__header">
+              <h3>🎯 Elevator Pitch</h3>
+              <button @click="copyText(result.elevator_pitch)" class="copy-btn">📋</button>
+            </div>
+            <p class="ai-pitch-text" x-text="result.elevator_pitch"></p>
+          </div>
+          <div class="ai-card" style="margin-top:16px;">
+            <div class="ai-card__header"><h3>📢 Marketing Hooks</h3></div>
+            <template x-for="(hook, i) in result.marketing_hooks" :key="i">
+              <div class="ai-hook-item">
+                <span class="ai-hook-context" x-text="hook.context || 'General'"></span>
+                <p x-text="hook.text || hook"></p>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </div>
+
+<script>
+function aiCopilot() {
+  return {
+    brief: { game_description: '', genre: '', art_style: '', target_audience: '', similar_games: '' },
+    result: null,
+    loading: false,
+    error: '',
+    tab: 'desc',
+
+    async generate() {
+      if (!this.brief.game_description.trim()) return;
+      this.loading = true;
+      this.error = '';
+      this.result = null;
+      try {
+        const resp = await fetch('/api/ai/generate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(this.brief)
+        });
+        const data = await resp.json();
+        if (data.error) { this.error = data.error; return; }
+        this.result = data;
+        this.tab = 'desc';
+      } catch(e) { this.error = 'Errore di connessione: ' + e.message; }
+      finally { this.loading = false; }
+    },
+
+    copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        // brief flash
+      });
+    },
+
+    formatSteamBBCode(text) {
+      if (!text) return '';
+      return text
+        .replace(/\[h2\](.*?)\[\/h2\]/g, '<h3 style="color:var(--text);margin:16px 0 8px;">$1</h3>')
+        .replace(/\[b\](.*?)\[\/b\]/g, '<strong>$1</strong>')
+        .replace(/\[i\](.*?)\[\/i\]/g, '<em>$1</em>')
+        .replace(/\[list\]/g, '<ul style="margin:8px 0;padding-left:20px;">')
+        .replace(/\[\/list\]/g, '</ul>')
+        .replace(/\[\*\](.*?)(?=\[\*\]|\[\/list\]|$)/g, '<li>$1</li>')
+        .replace(/\n/g, '<br>');
+    },
+
+    formatAssetName(key) {
+      const names = {
+        capsule_main: 'Capsule Art (460×215)',
+        capsule_small: 'Capsule Small (231×87)',
+        header_image: 'Header Image (460×215)',
+        library_hero: 'Library Hero (3840×1240)',
+        screenshot_1: 'Screenshot 1 (1920×1080)',
+        screenshot_2: 'Screenshot 2 (1920×1080)',
+        screenshot_3: 'Screenshot 3 (1920×1080)',
+      };
+      return names[key] || key.replace(/_/g, ' ');
+    }
+  }
+}
+</script>
 {% endblock %}

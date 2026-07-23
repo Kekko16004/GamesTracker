@@ -1,0 +1,94 @@
+{% if result is none %}
+<div class="empty-state">
+  <div class="empty-state__icon">&#x1F3AF;</div>
+  <h3 class="empty-state__title">Fill in your game details and calculate</h3>
+  <p class="empty-state__sub">Adjust the store page, reviews, social and care signals on the left, then hit Calculate Score to see your quality score breakdown.</p>
+</div>
+{% else %}
+<!-- ======== BIG SCORE GAUGE ======== -->
+<div class="score-gauge-big score-gauge-big--{{ result.score_class }}">
+  <div class="score-gauge-big__ring">
+    <span class="score-gauge-big__value mono">{{ "%.0f" | format(result.score) }}</span>
+    <span class="score-gauge-big__max">/ 100</span>
+  </div>
+  <span class="score-gauge-big__label">
+    {% if result.score_class == 'score-high' %}Strong quality score
+    {% elif result.score_class == 'score-mid' %}Middling quality score
+    {% else %}Needs work
+    {% endif %}
+  </span>
+</div>
+
+<!-- ======== COMPONENT BREAKDOWN ======== -->
+<section class="simulator-breakdown">
+  <h3 class="simulator-breakdown__title">Component Breakdown</h3>
+
+  {% set labels = {
+    'store_page': 'Store Page',
+    'reviews': 'Reviews',
+    'social': 'Social',
+    'growth': 'Growth',
+    'care': 'Care Signals'
+  } %}
+  {% set icons = {
+    'store_page': '&#x1F3EA;',
+    'reviews': '&#x2B50;',
+    'social': '&#x1F310;',
+    'growth': '&#x1F4C8;',
+    'care': '&#x1FA7A;'
+  } %}
+
+  {% for key, value in result.breakdown.components.items() %}
+  <div class="breakdown-bar">
+    <div class="breakdown-bar__head">
+      <span class="breakdown-bar__label">
+        <span class="breakdown-bar__icon">{{ icons.get(key, '&#x25A0;') | safe }}</span>
+        {{ labels.get(key, key | capitalize) }}
+        <span class="breakdown-bar__weight">weight {{ (result.breakdown.weights.get(key, 0) * 100) | round | int }}%</span>
+      </span>
+      <span class="breakdown-bar__value mono">{{ (value * 100) | round | int }}</span>
+    </div>
+    <div class="breakdown-bar__track">
+      <div
+        class="breakdown-bar__fill breakdown-bar__fill--{% if value >= 0.7 %}high{% elif value >= 0.4 %}mid{% else %}low{% endif %}"
+        style="width: {{ (value * 100) | round(1) }}%;"
+      ></div>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<!-- ======== PENALTIES ======== -->
+{% if result.breakdown.penalties %}
+<section class="simulator-penalties">
+  <h3 class="simulator-breakdown__title">Penalties Applied</h3>
+  <ul class="penalty-list">
+    {% for penalty in result.breakdown.penalties %}
+    <li class="penalty-item">
+      <span class="penalty-item__icon">&#x26A0;</span>
+      <span class="penalty-item__text">{{ penalty | replace('_', ' ') | capitalize }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="simulator-penalties__factor">
+    Penalty factor: <span class="mono">&times;{{ result.breakdown.penalty_factor }}</span>
+  </p>
+</section>
+{% endif %}
+
+<!-- ======== TIPS ======== -->
+{% if result.lowest_components %}
+<section class="simulator-tips">
+  <h3 class="simulator-breakdown__title">Tips to Improve</h3>
+  {% for key in result.lowest_components %}
+  <div class="tip-card">
+    <span class="tip-card__icon">{{ icons.get(key, '&#x1F4A1;') | safe }}</span>
+    <div class="tip-card__body">
+      <span class="tip-card__label">{{ labels.get(key, key | capitalize) }}</span>
+      <p class="tip-card__text">{{ result.tips.get(key, 'Keep improving this component.') }}</p>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endif %}

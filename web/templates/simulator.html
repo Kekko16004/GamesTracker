@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Simulator — GamesTracker{% endblock %}
+
+{% block content %}
+<!-- ======== HEADER ======== -->
+<div class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__h1">Quality Score Simulator</h1>
+    <p class="page-header__sub">Preview how store page, reviews, social and care signals combine into your quality score — before you ship.</p>
+  </div>
+</div>
+
+<div class="simulator-layout">
+  <!-- ======================== LEFT: FORM ======================== -->
+  <form
+    class="simulator-form"
+    hx-post="/simulator"
+    hx-target="#results"
+    hx-swap="innerHTML"
+  >
+    <!-- Store Page -->
+    <div class="simulator-section">
+      <h2 class="simulator-section__title">
+        <span class="simulator-section__icon">&#x1F3EA;</span>
+        Store Page
+      </h2>
+
+      <div class="form-group">
+        <label class="form-label" for="description">Description</label>
+        <textarea
+          id="description"
+          name="description"
+          class="form-input form-textarea"
+          rows="4"
+          placeholder="Describe your game... (600+ characters scores best)"
+        >{{ result.inputs.description if result else '' }}</textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="screenshot_count">Screenshot count</label>
+          <input
+            id="screenshot_count"
+            name="screenshot_count"
+            type="number"
+            min="0" max="20" step="1"
+            class="form-input"
+            value="{{ result.inputs.screenshot_count if result else 0 }}"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="form-checkbox">
+          <input type="checkbox" name="has_trailer" {% if result and result.inputs.has_trailer %}checked{% endif %} />
+          <span>Has trailer</span>
+        </label>
+        <label class="form-checkbox">
+          <input type="checkbox" name="has_header" {% if result and result.inputs.has_header %}checked{% endif %} />
+          <span>Has header image</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="simulator-section">
+      <h2 class="simulator-section__title">
+        <span class="simulator-section__icon">&#x1F3F7;</span>
+        Content
+      </h2>
+
+      <div class="form-group">
+        <label class="form-label" for="genres">Genres <span class="form-hint">(comma-separated)</span></label>
+        <input
+          id="genres"
+          name="genres"
+          type="text"
+          class="form-input"
+          placeholder="Roguelike, Metroidvania, Pixel Graphics"
+          value="{{ result.inputs.genres if result else '' }}"
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="tags">Tags <span class="form-hint">(comma-separated)</span></label>
+        <input
+          id="tags"
+          name="tags"
+          type="text"
+          class="form-input"
+          placeholder="Difficult, Atmospheric, Story Rich"
+          value="{{ result.inputs.tags if result else '' }}"
+        />
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <div class="simulator-section">
+      <h2 class="simulator-section__title">
+        <span class="simulator-section__icon">&#x1F4B0;</span>
+        Pricing
+      </h2>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="price">Price (USD)</label>
+          <input
+            id="price"
+            name="price"
+            type="number"
+            min="0" step="0.01"
+            class="form-input"
+            value="{{ result.inputs.price if result else 0 }}"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="form-checkbox">
+          <input type="checkbox" name="is_free" {% if result and result.inputs.is_free %}checked{% endif %} />
+          <span>Free to play</span>
+        </label>
+        <label class="form-checkbox">
+          <input type="checkbox" name="has_demo" {% if result and result.inputs.has_demo %}checked{% endif %} />
+          <span>Has demo</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Care Signals -->
+    <div class="simulator-section">
+      <h2 class="simulator-section__title">
+        <span class="simulator-section__icon">&#x1FA7A;</span>
+        Care Signals
+      </h2>
+
+      <div class="form-row">
+        <label class="form-checkbox">
+          <input type="checkbox" name="developer_other_games" {% if result and result.inputs.developer_other_games %}checked{% endif %} />
+          <span>Developer has other games</span>
+        </label>
+        <label class="form-checkbox">
+          <input type="checkbox" name="has_official_site" {% if result and result.inputs.has_official_site %}checked{% endif %} />
+          <span>Has official website</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Reviews (estimate) -->
+    <div class="simulator-section">
+      <h2 class="simulator-section__title">
+        <span class="simulator-section__icon">&#x2B50;</span>
+        Reviews (estimate)
+      </h2>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="review_count">Estimated review count</label>
+          <input
+            id="review_count"
+            name="review_count"
+            type="number"
+            min="0" step="1"
+            class="form-input"
+            value="{{ result.inputs.review_count if result else 0 }}"
+          />
+        </div>
+      </div>
+
+      <div class="form-group" x-data="{ pct: {{ result.inputs.review_pct_positive if result else 80 }} }">
+        <label class="form-label" for="review_pct_positive">
+          % positive <span class="form-hint mono" x-text="pct + '%'"></span>
+        </label>
+        <input
+          id="review_pct_positive"
+          name="review_pct_positive"
+          type="range"
+          min="0" max="100" step="1"
+          class="form-range"
+          x-model="pct"
+          value="{{ result.inputs.review_pct_positive if result else 80 }}"
+        />
+      </div>
+    </div>
+
+    <!-- Social -->
+    <div class="simulator-section">
+      <h2 class="simulator-section__title">
+        <span class="simulator-section__icon">&#x1F310;</span>
+        Social
+      </h2>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="social_platforms">Active platforms</label>
+          <input
+            id="social_platforms"
+            name="social_platforms"
+            type="number"
+            min="0" max="10" step="1"
+            class="form-input"
+            value="{{ result.inputs.social_platforms if result else 0 }}"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="social_post_count">Post count</label>
+          <input
+            id="social_post_count"
+            name="social_post_count"
+            type="number"
+            min="0" step="1"
+            class="form-input"
+            value="{{ result.inputs.social_post_count if result else 0 }}"
+          />
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn--lg btn--primary simulator-submit">
+      &#x1F3AF; Calculate Score
+    </button>
+  </form>
+
+  <!-- ======================== RIGHT: RESULTS ======================== -->
+  <div id="results" class="simulator-results">
+    {% include "partials/simulator_results.html" %}
+  </div>
+</div>
+{% endblock %}

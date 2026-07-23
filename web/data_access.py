@@ -419,3 +419,60 @@ def get_all_social_posts(*, platform: Optional[str] = None) -> list[dict[str, An
     # bool (True > False reversed = True first). Push them to the end.
     posts.sort(key=lambda p: p["posted_at"] is None)
     return posts
+
+
+def get_ai_context_data() -> dict[str, Any]:
+    """Gather real market data from tracked games to inform AI suggestions.
+
+    Returns a structured dict with trending genres, top tags, price patterns,
+    and description stats from the actual game database. This grounds the AI
+    copilot in REAL data instead of generic suggestions.
+    """
+    repo = _get_repo()
+    all_games = repo.list_games(min_quality_score=0, limit=None, offset=0)
+    trends = repo.genre_trends(min_quality_score=0)
+    dist = repo.genre_distribution(min_quality_score=0)
+
+    total = len(all_games)
+
+    # Top games by quality score.
+    scored = [g for g in all_games if g.quality_score is not None]
+    scored.sort(key=lambda g: g.quality_score or 0, reverse=True)
+    top_games = scored[:20]
+
+    # Extract common tags from top games.
+    tag_counts: dict[str, int] = {}
+    for g in top_games:
+        for genre in (g.genres or "").split(","):
+            genre = genre.strip()
+            if genre:
+                tag_counts[genre] = tag_counts.get(genre, 0) + 1
+    top_tags = sorted(tag_counts, key=tag_counts.get, reverse=True)[:15]
+
+    # Top genres by average quality score.
+    top_genres = []
+    for t in sorted(trends, key=lambda x: x.avg_quality_score or 0, reverse=True)[:10]:
+        top_genres.append({
+            "genre": t.genre,
+            "game_count": t.game_count,
+            "avg_quality_score": round(t.avg_quality_score or 0, 1),
+        })
+
+    # Price analysis.
+    prices = [g for g in scored if hasattr(g, 'price') and g.price is not None]
+
+    # Top performing game titles for reference.
+    top_titles = [
+        {"title": g.title, "score": round(g.quality_score, 1), "genres": g.genres}
+        for g in top_games[:10]
+        if g.title
+    ]
+
+    return {
+        "total_tracked": total,
+        "total_scored": len(scored),
+        "top_genres": top_genres,
+        "top_tags": top_tags,
+        "top_games": top_titles,
+        "genre_distribution": dict(dist),
+    }

@@ -7,15 +7,17 @@ same SQLite database used by the desktop GUI.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from gui.simulator_logic import SimulatorInputs, simulate_score
 from web import data_access as da
 
 # ---------------------------------------------------------------------------
@@ -42,7 +44,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -228,9 +230,280 @@ async def social(
 
 @app.get("/ai", response_class=HTMLResponse, tags=["pages"])
 async def ai_copilot(request: Request) -> HTMLResponse:
-    """AI Copilot placeholder page."""
-    ctx = {**_base_context(request)}
+    """AI Copilot — data-driven game marketing assistant."""
+    context_data = da.get_ai_context_data()
+    ctx = {
+        **_base_context(request),
+        "context_games": context_data.get("total_tracked", 0),
+    }
     return templates.TemplateResponse(request, "ai.html", ctx)
+
+
+@app.post("/api/ai/generate", tags=["api"])
+async def ai_generate(request: Request) -> JSONResponse:
+    """Generate game marketing materials using the AI copilot.
+
+    Accepts a JSON body with the game brief, loads real market context
+    from tracked games, and returns descriptions, titles, image prompts,
+    tags, and marketing hooks — all grounded in actual data.
+    """
+    import asyncio
+
+    body = await request.json()
+    desc = (body.get("game_description") or "").strip()
+    if not desc:
+        return JSONResponse({"error": "game_description is required"}, status_code=400)
+
+    # Load real market context from DB.
+    trending_data = da.get_ai_context_data()
+
+    try:
+        from core.ai.llm_client import LLMClient, load_llm_config, LLMError
+        from core.ai.game_copilot import GameBrief, GameCopilot
+
+        config = load_llm_config()
+        if not config.api_key:
+            return JSONResponse({
+                "error": "AI non configurata. Aggiungi in config/.env:\n"
+                         "AI_PROVIDER=openrouter\n"
+                         "AI_API_KEY=sk-or-v1-...\n"
+                         "AI_MODEL=anthropic/claude-sonnet-4"
+            }, status_code=400)
+
+        brief = GameBrief(
+            game_description=desc,
+            genre=body.get("genre") or None,
+            art_style=body.get("art_style") or None,
+            target_audience=body.get("target_audience") or None,
+            similar_games=(body.get("similar_games") or "").split(",") if body.get("similar_games") else None,
+        )
+
+        client = LLMClient(config)
+        copilot = GameCopilot(client=client, trending_data=trending_data)
+
+        try:
+            result = await copilot.generate_all(brief)
+        finally:
+            await client.close()
+
+        # Serialize CopilotResult to dict.
+        return JSONResponse({
+            "steam_description_short": getattr(result, "steam_description_short", ""),
+            "steam_description_long": getattr(result, "steam_description_long", ""),
+            "titles": getattr(result, "titles", []),
+            "image_prompts": getattr(result, "image_prompts", {}),
+            "tags": getattr(result, "tags", []),
+            "elevator_pitch": getattr(result, "elevator_pitch", ""),
+            "marketing_hooks": getattr(result, "marketing_hooks", []),
+        })
+    except ImportError:
+        return JSONResponse({
+            "error": "Modulo AI non disponibile. Verifica che core/ai/ esista."
+        }, status_code=500)
+    except Exception as exc:
+        log.exception("AI generation failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# Quality Score Simulator
+# ---------------------------------------------------------------------------
+
+
+def _split_csv(value: str) -> list[str]:
+    """Splits a comma-separated form field into a clean list of strings."""
+    if not value:
+        return []
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _form_float(form: Any, key: str, default: float = 0.0) -> float:
+    """Reads a float from form data, tolerating empty strings."""
+    raw = form.get(key)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _form_int(form: Any, key: str, default: int = 0) -> int:
+    """Reads an int from form data, tolerating empty strings and floats."""
+    raw = form.get(key)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return default
+
+
+def _form_bool(form: Any, key: str) -> bool:
+    """Reads a checkbox from form data (present with any value => True)."""
+    return form.get(key) is not None
+
+
+def _lowest_components(breakdown: dict[str, Any], n: int = 2) -> list[str]:
+    """Returns the ``n`` lowest-scoring component names from a breakdown."""
+    components = breakdown.get("components") or {}
+    ordered = sorted(components.items(), key=lambda kv: kv[1])
+    return [name for name, _score in ordered[:n]]
+
+
+_SIMULATOR_TIPS: dict[str, str] = {
+    "store_page": (
+        "Add a trailer, at least 5 screenshots, and a longer description "
+        "(600+ characters) with clear genres/tags to boost your store page score."
+    ),
+    "reviews": (
+        "Reviews carry the highest weight (30%). Focus on getting more players "
+        "to leave reviews, and aim for a high positive percentage."
+    ),
+    "social": (
+        "Be active on more platforms and post more consistently. Even modest, "
+        "regular posting improves this component."
+    ),
+    "growth": (
+        "Growth is measured over time from real snapshots and stays neutral "
+        "here in the simulator — it isn't something you can directly input."
+    ),
+    "care": (
+        "Add a demo, list an official site, and consider your pricing — these "
+        "'care signals' show players the project is actively maintained."
+    ),
+}
+
+
+@app.get("/simulator", response_class=HTMLResponse, tags=["pages"])
+async def simulator_page(request: Request) -> HTMLResponse:
+    """Quality Score Simulator — empty form, no result yet."""
+    ctx = {**_base_context(request), "result": None}
+    return templates.TemplateResponse(request, "simulator.html", ctx)
+
+
+@app.post("/simulator", response_class=HTMLResponse, tags=["pages"])
+async def simulator_calculate(request: Request) -> HTMLResponse:
+    """Parses the simulator form, computes the quality score, and renders results."""
+    form = await request.form()
+
+    inputs = SimulatorInputs(
+        title=str(form.get("title") or ""),
+        description=str(form.get("description") or ""),
+        screenshot_count=_form_int(form, "screenshot_count"),
+        has_trailer=_form_bool(form, "has_trailer"),
+        has_header=_form_bool(form, "has_header"),
+        genres=_split_csv(str(form.get("genres") or "")),
+        tags=_split_csv(str(form.get("tags") or "")),
+        price=_form_float(form, "price"),
+        is_free=_form_bool(form, "is_free"),
+        has_demo=_form_bool(form, "has_demo"),
+        developer_other_games=_form_bool(form, "developer_other_games"),
+        has_official_site=_form_bool(form, "has_official_site"),
+        review_pct_positive=_form_float(form, "review_pct_positive"),
+        review_count=_form_int(form, "review_count"),
+        social_platforms=_form_int(form, "social_platforms"),
+        social_post_count=_form_int(form, "social_post_count"),
+    )
+
+    score, breakdown = simulate_score(inputs)
+
+    result = {
+        "score": score,
+        "breakdown": breakdown,
+        "score_class": _score_class(score),
+        "lowest_components": _lowest_components(breakdown),
+        "tips": _SIMULATOR_TIPS,
+        "inputs": {
+            "title": inputs.title,
+            "description": inputs.description,
+            "screenshot_count": inputs.screenshot_count,
+            "has_trailer": inputs.has_trailer,
+            "has_header": inputs.has_header,
+            "genres": ", ".join(inputs.genres),
+            "tags": ", ".join(inputs.tags),
+            "price": inputs.price,
+            "is_free": inputs.is_free,
+            "has_demo": inputs.has_demo,
+            "developer_other_games": inputs.developer_other_games,
+            "has_official_site": inputs.has_official_site,
+            "review_count": inputs.review_count,
+            "review_pct_positive": inputs.review_pct_positive,
+            "social_platforms": inputs.social_platforms,
+            "social_post_count": inputs.social_post_count,
+        },
+    }
+
+    ctx = {**_base_context(request), "result": result}
+
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, "partials/simulator_results.html", ctx)
+    return templates.TemplateResponse(request, "simulator.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# Manual Social Post Import
+# ---------------------------------------------------------------------------
+
+
+@app.post("/game/{game_id}/add-post", tags=["pages"])
+async def add_social_post(request: Request, game_id: int):
+    """Saves a manually-entered social post for a game via the core import path."""
+    detail = da.get_game_detail(game_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+    form = await request.form()
+
+    platform = str(form.get("platform") or "").strip()
+    url = str(form.get("url") or "").strip()
+    title = str(form.get("title") or "").strip() or None
+    handle = str(form.get("handle") or "").strip() or None
+
+    posted_at_raw = str(form.get("posted_at") or "").strip()
+    posted_at: Optional[datetime] = None
+    if posted_at_raw:
+        try:
+            posted_at = datetime.strptime(posted_at_raw, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+        except ValueError:
+            posted_at = None
+
+    def _metric(key: str) -> Optional[int]:
+        raw = str(form.get(key) or "").strip()
+        if not raw:
+            return None
+        try:
+            return int(float(raw))
+        except (TypeError, ValueError):
+            return None
+
+    if not platform or not url:
+        raise HTTPException(status_code=400, detail="platform and url are required")
+
+    from core.db import session_scope
+    from core.sources.social.manual_import import ManualImportError, import_manual_post
+
+    try:
+        with session_scope() as session:
+            import_manual_post(
+                session,
+                game_id=game_id,
+                platform=platform,
+                url=url,
+                posted_at=posted_at,
+                title=title,
+                views=_metric("views"),
+                likes=_metric("likes"),
+                comments=_metric("comments"),
+                shares=_metric("shares"),
+                handle=handle,
+            )
+    except ManualImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return RedirectResponse(url=f"/game/{game_id}", status_code=303)
 
 
 # ---------------------------------------------------------------------------

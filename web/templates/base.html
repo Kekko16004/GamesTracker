@@ -61,6 +61,11 @@
         <span class="sidebar__link-icon">&#x1F4CB;</span>
         Reports
       </a>
+      <a href="/simulator"
+         class="sidebar__link {% if request.url.path == '/simulator' %}sidebar__link--active{% endif %}">
+        <span class="sidebar__link-icon">&#x1F3AF;</span>
+        Simulator
+      </a>
       <a href="/social"
          class="sidebar__link {% if request.url.path == '/social' %}sidebar__link--active{% endif %}">
         <span class="sidebar__link-icon">&#x1F310;</span>

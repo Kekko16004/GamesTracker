@@ -3,6 +3,7 @@
 {% block title %}{{ game.title }} — GamesTracker{% endblock %}
 
 {% block content %}
+<div x-data="{ showAddPost: false }">
 <!-- ======== HERO BANNER ======== -->
 <div class="detail-hero">
   <div class="detail-hero__banner">
@@ -168,6 +169,11 @@
 
   <!-- ======== SOCIAL TAB ======== -->
   <div class="tab-panel" :class="{ active: tab === 'social' }">
+    <div class="social-tab-header">
+      <button type="button" class="btn btn--md btn--primary" @click="showAddPost = true">
+        &#x2795; Add Social Post
+      </button>
+    </div>
     {% if game.social_posts %}
     <div class="social-posts-grid">
       {% for post in game.social_posts %}
@@ -271,6 +277,75 @@
     </div>
     {% endif %}
   </div>
+</div>
+
+<!-- ======== ADD SOCIAL POST MODAL ======== -->
+<div
+  class="modal-overlay"
+  x-show="showAddPost"
+  x-cloak
+  @keydown.escape.window="showAddPost = false"
+  style="display: none;"
+>
+  <div class="modal-content" @click.outside="showAddPost = false">
+    <div class="modal-content__header">
+      <h3 class="modal-content__title">&#x2795; Add Social Post</h3>
+      <button type="button" class="modal-content__close" @click="showAddPost = false" aria-label="Close">&times;</button>
+    </div>
+
+    <form class="modal-content__form" method="post" action="/game/{{ game.id }}/add-post">
+      <div class="form-group">
+        <label class="form-label" for="add-post-platform">Platform</label>
+        <select id="add-post-platform" name="platform" class="form-select" required>
+          <option value="tiktok">TikTok</option>
+          <option value="instagram">Instagram</option>
+          <option value="youtube">YouTube</option>
+          <option value="reddit">Reddit</option>
+          <option value="twitter">X / Twitter</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="add-post-url">URL</label>
+        <input id="add-post-url" name="url" type="text" class="form-input" placeholder="https://..." required />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="add-post-title">Title / description <span class="form-hint">(optional)</span></label>
+        <input id="add-post-title" name="title" type="text" class="form-input" placeholder="What's the post about?" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="add-post-date">Date posted <span class="form-hint">(optional)</span></label>
+        <input id="add-post-date" name="posted_at" type="date" class="form-input" />
+      </div>
+
+      <div class="form-row form-row--4">
+        <div class="form-group">
+          <label class="form-label" for="add-post-views">Views</label>
+          <input id="add-post-views" name="views" type="number" min="0" class="form-input" placeholder="&mdash;" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-post-likes">Likes</label>
+          <input id="add-post-likes" name="likes" type="number" min="0" class="form-input" placeholder="&mdash;" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-post-comments">Comments</label>
+          <input id="add-post-comments" name="comments" type="number" min="0" class="form-input" placeholder="&mdash;" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-post-shares">Shares</label>
+          <input id="add-post-shares" name="shares" type="number" min="0" class="form-input" placeholder="&mdash;" />
+        </div>
+      </div>
+
+      <div class="modal-content__actions">
+        <button type="button" class="btn btn--md btn--ghost" @click="showAddPost = false">Cancel</button>
+        <button type="submit" class="btn btn--md btn--primary">Save Post</button>
+      </div>
+    </form>
+  </div>
+</div>
 </div>
 
 {% endblock %}
