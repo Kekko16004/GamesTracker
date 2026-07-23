@@ -180,11 +180,19 @@ class ScrapingOrchestrator:
     async def run_all_for_game_ids(
         self,
         game_id_map: dict[str, int],
+        game_aliases: Optional[dict[str, list[str]]] = None,
     ) -> dict[str, int]:
         """Runs all scrapers and persists results for known game IDs.
 
+        In addition to searching by game title, also searches by any aliases
+        provided (e.g. developer name, publisher name, combined query). All
+        results are deduplicated by ``post_url`` before saving.
+
         Args:
             game_id_map: Mapping of ``{game_title: game_id}`` for DB persistence.
+            game_aliases: Optional mapping of ``{game_title: [alias, ...]}``.
+                Each alias is an extra search term run alongside the title.
+                Typical use: developer name and "title developer" combined query.
 
         Returns:
             Dict with summary counts.
@@ -192,11 +200,13 @@ class ScrapingOrchestrator:
         from core.sources.social.persistence import save_posts
 
         stats = {"games": 0, "posts_collected": 0, "posts_saved": 0, "errors": 0}
+        aliases_map = game_aliases or {}
 
         for title, game_id in game_id_map.items():
             stats["games"] += 1
             try:
-                posts = await self._scrape_all_for_title(title)
+                aliases = aliases_map.get(title, [])
+                posts = await self._scrape_all_for_title(title, aliases=aliases)
                 stats["posts_collected"] += len(posts)
 
                 if posts and game_id:
@@ -218,32 +228,50 @@ class ScrapingOrchestrator:
 
         return stats
 
-    async def _scrape_all_for_title(self, game_title: str) -> list[SocialPost]:
-        """Runs all scrapers concurrently for a single game title.
+    async def _scrape_all_for_title(
+        self,
+        game_title: str,
+        aliases: Optional[list[str]] = None,
+    ) -> list[SocialPost]:
+        """Runs all scrapers concurrently for a single game title and its aliases.
 
-        Gathers results from TikTok, Instagram, X/Twitter, and Reddit,
-        deduplicated by ``post_url``. Individual scraper failures do not
-        abort the others.
+        Gathers results from TikTok, Instagram, X/Twitter, and Reddit for the
+        primary title and for each alias (e.g. developer name, combined query).
+        All results are deduplicated by ``post_url`` across all search terms and
+        platforms before being returned.
+
+        Individual scraper failures do not abort the others.
 
         Args:
-            game_title: Name of the indie game.
+            game_title: Name of the indie game (primary search term).
+            aliases: Additional search terms to run alongside the title.
+                Typical values: developer name, publisher name, and/or a
+                combined "title developer" query string.
 
         Returns:
-            Deduplicated list of ``SocialPost`` from all platforms.
+            Deduplicated list of ``SocialPost`` from all platforms and terms.
         """
-        tasks = [
-            self._safe_scrape(self._tiktok, game_title),
-            self._safe_scrape(self._instagram, game_title),
-            self._safe_scrape(self._x, game_title),
-            self._safe_scrape(self._reddit, game_title),
-        ]
+        search_terms = [game_title] + list(aliases or [])
+
+        # Build tasks for every (search_term, scraper) combination and run all
+        # concurrently.  This keeps the same total wall-clock time regardless of
+        # how many aliases are present.
+        tasks: list = []
+        for term in search_terms:
+            tasks.extend([
+                self._safe_scrape(self._tiktok, term),
+                self._safe_scrape(self._instagram, term),
+                self._safe_scrape(self._x, term),
+                self._safe_scrape(self._reddit, term),
+            ])
+
         results = await asyncio.gather(*tasks)
 
         all_posts: list[SocialPost] = []
         for platform_posts in results:
             all_posts.extend(platform_posts)
 
-        # Dedup by post_url across all platforms.
+        # Dedup by post_url across all platforms and search terms.
         seen: set[str] = set()
         unique: list[SocialPost] = []
         for p in all_posts:
@@ -283,6 +311,7 @@ class ScrapingOrchestrator:
 def run_once_sync(
     game_id_map: Optional[dict[str, int]] = None,
     game_titles: Optional[list[str]] = None,
+    game_aliases: Optional[dict[str, list[str]]] = None,
 ) -> dict[str, int]:
     """Synchronous entry point for APScheduler and CLI usage.
 
@@ -293,6 +322,10 @@ def run_once_sync(
     Args:
         game_id_map: ``{game_title: game_id}`` mapping for DB persistence.
         game_titles: Fallback list of titles (no DB persistence).
+        game_aliases: Optional ``{game_title: [alias, ...]}`` mapping.
+            Aliases are additional search terms (developer name, publisher name,
+            combined queries) run alongside the game title.  Only used when
+            ``game_id_map`` is provided.
 
     Returns:
         Stats dict from the orchestrator.
@@ -314,7 +347,9 @@ def run_once_sync(
     try:
         if game_id_map:
             return loop.run_until_complete(
-                orchestrator.run_all_for_game_ids(game_id_map)
+                orchestrator.run_all_for_game_ids(
+                    game_id_map, game_aliases=game_aliases
+                )
             )
         elif game_titles:
             return loop.run_until_complete(orchestrator.run_all(game_titles))
@@ -332,10 +367,19 @@ def run_once_sync(
 # ---------------------------------------------------------------------------
 
 
-def _build_game_id_map_from_db() -> dict[str, int]:
+def _build_game_id_map_from_db() -> tuple[dict[str, int], dict[str, list[str]]]:
     """Queries the DB for all tracked (non-discarded) games.
 
-    Returns a ``{title: game_id}`` mapping for the orchestrator.
+    Returns a tuple of:
+    - ``{title: game_id}`` mapping for the orchestrator (primary search terms).
+    - ``{title: [alias, ...]}`` mapping for additional search terms derived from
+      the developer name, publisher name, and a combined "title developer" query.
+
+    For example, a game "Bookshop Simulator" by "Blep Games" produces aliases:
+        ["Blep Games", "Bookshop Simulator Blep Games"]
+
+    This allows the scrapers to find TikTok/YouTube content posted by or
+    mentioning the developer account, not just the game title.
     """
     try:
         from sqlalchemy import select
@@ -351,28 +395,60 @@ def _build_game_id_map_from_db() -> dict[str, int]:
                     .order_by(Game.id)
                 )
             )
-        return {g.title: g.id for g in games if g.title}
+
+        game_id_map: dict[str, int] = {}
+        game_aliases: dict[str, list[str]] = {}
+
+        for g in games:
+            if not g.title:
+                continue
+            title = g.title
+            game_id_map[title] = g.id
+
+            aliases: list[str] = []
+            # Collect unique, non-empty credit names (developer and publisher).
+            credits: list[str] = []
+            for credit in (g.developer, g.publisher):
+                if credit and credit.strip() and credit.strip() not in credits:
+                    credits.append(credit.strip())
+
+            for credit in credits:
+                # Search the credit name alone (e.g. "Blep Games" channel posts).
+                if credit not in aliases:
+                    aliases.append(credit)
+                # Search the combined "title developer" query to catch posts that
+                # mention both (e.g. "Bookshop Simulator Blep Games").
+                combined = f"{title} {credit}"
+                if combined not in aliases:
+                    aliases.append(combined)
+
+            if aliases:
+                game_aliases[title] = aliases
+
+        return game_id_map, game_aliases
+
     except Exception as exc:  # noqa: BLE001
         logger.warning("[orchestrator] Could not load games from DB: %s", exc)
-        return {}
+        return {}, {}
 
 
 def run_social_scraping_job() -> dict[str, int]:
     """APScheduler-compatible job: scrapes all tracked games.
 
-    Reads game titles and IDs from the DB, runs all scrapers, and saves
-    results. Designed to run every ``SCRAPING_INTERVAL_HOURS`` hours.
+    Reads game titles, IDs, and developer/publisher aliases from the DB, runs
+    all scrapers for each title AND its aliases, and saves deduplicated results.
+    Designed to run every ``SCRAPING_INTERVAL_HOURS`` hours.
 
     Returns:
         Stats dict from the orchestrator.
     """
     logger.info("[orchestrator] Starting scheduled social scraping job.")
-    game_id_map = _build_game_id_map_from_db()
+    game_id_map, game_aliases = _build_game_id_map_from_db()
     if not game_id_map:
         logger.info("[orchestrator] No games found in DB; skipping scraping job.")
         return {"games": 0, "posts_collected": 0, "posts_saved": 0, "errors": 0}
 
-    stats = run_once_sync(game_id_map=game_id_map)
+    stats = run_once_sync(game_id_map=game_id_map, game_aliases=game_aliases)
     logger.info(
         "[orchestrator] Job complete: games=%(games)s, "
         "collected=%(posts_collected)s, saved=%(posts_saved)s, errors=%(errors)s",

@@ -202,8 +202,13 @@ def collect_trend_input(session, include_discarded: bool = True) -> list[dict[st
     from core.models import Game, GameSnapshot
 
     records: list[dict[str, Any]] = []
-    games = list(session.scalars(select(Game)))
+    # Use DISTINCT to guard against any ORM-level duplicate rows.
+    seen_ids: set[int] = set()
+    games = list(session.scalars(select(Game).distinct()))
     for game in games:
+        if game.id in seen_ids:
+            continue
+        seen_ids.add(game.id)
         snaps = list(
             session.scalars(
                 select(GameSnapshot)

@@ -126,10 +126,55 @@ def _run_social_phase(emit: EmitFn) -> None:
         emit("social", "error", 0, None, str(exc))
 
 
+def _build_scraping_maps() -> tuple[dict[str, int], dict[str, list[str]]]:
+    """Legge dal DB la mappa {titolo: game_id} e {titolo: [alias, ...]}.
+
+    Gli alias includono il nome dello sviluppatore, del publisher e la query
+    combinata "titolo sviluppatore" per trovare post che menzionano il dev
+    e non il titolo del gioco.
+
+    Ritorna (game_id_map, game_aliases) oppure ({}, {}) in caso di errore.
+    """
+    try:
+        game_id_map: dict[str, int] = {}
+        game_aliases: dict[str, list[str]] = {}
+
+        with session_scope() as session:
+            games = list(session.scalars(select(Game).where(Game.discarded.is_(False))))
+
+        for g in games:
+            if not g.title:
+                continue
+            title = g.title
+            game_id_map[title] = g.id
+
+            aliases: list[str] = []
+            credits: list[str] = []
+            for credit in (g.developer, g.publisher):
+                if credit and credit.strip() and credit.strip() not in credits:
+                    credits.append(credit.strip())
+            for credit in credits:
+                if credit not in aliases:
+                    aliases.append(credit)
+                combined = f"{title} {credit}"
+                if combined not in aliases:
+                    aliases.append(combined)
+            if aliases:
+                game_aliases[title] = aliases
+
+        return game_id_map, game_aliases
+
+    except Exception:  # noqa: BLE001
+        logger.exception("Impossibile caricare la mappa giochi per lo scraping")
+        return {}, {}
+
+
 def _run_scraping_phase(emit: EmitFn) -> None:
     """Fase scraping: TikTok, Instagram, X, Reddit (senza API key).
 
     Usa il nuovo scraping engine (core.sources.social.scraping_orchestrator).
+    Cerca ogni gioco per TITOLO, per SVILUPPATORE/PUBLISHER e per la query
+    combinata "titolo sviluppatore", poi dedup per post_url prima di salvare.
     Attivo SOLO se SCRAPING_ENABLED=true nel config/.env.
     """
     from core.config import get_settings
@@ -148,8 +193,9 @@ def _run_scraping_phase(emit: EmitFn) -> None:
          "Scraping TikTok, Instagram, X, Reddit...")
     try:
         from core.sources.social.scraping_orchestrator import run_once_sync
-        stats = run_once_sync()
-        total = stats.get("total_posts", 0) if isinstance(stats, dict) else 0
+        game_id_map, game_aliases = _build_scraping_maps()
+        stats = run_once_sync(game_id_map=game_id_map, game_aliases=game_aliases)
+        total = stats.get("posts_saved", 0) if isinstance(stats, dict) else 0
         emit("scraping", "end", total, None,
              f"{total} post trovati via scraping")
     except Exception as exc:  # noqa: BLE001

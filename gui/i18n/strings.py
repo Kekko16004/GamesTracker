@@ -22,6 +22,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "app.title": {"it": "GamesTracker", "en": "GamesTracker"},
     "app.language": {"it": "Lingua", "en": "Language"},
     "app.menu.view": {"it": "Vista", "en": "View"},
+    "app.menu.theme": {"it": "Tema", "en": "Theme"},
     "app.menu.language": {"it": "Lingua", "en": "Language"},
     # --- Navigazione tra le viste ---
     "nav.dashboard": {"it": "Dashboard", "en": "Dashboard"},

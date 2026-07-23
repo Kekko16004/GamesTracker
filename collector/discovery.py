@@ -23,6 +23,8 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy import select
+
 from core.db import session_scope
 from core.models import Game, Platform, SnapshotType
 from core.sources import (
@@ -105,6 +107,23 @@ def _schedule_snapshots(game: Game) -> None:
     )
 
 
+def _title_exists(session, title: str) -> bool:
+    """Returns True if any game with this exact title already exists in the DB.
+
+    Used for cross-platform deduplication: a game discovered on itch and then
+    on Steam (same title, different external_id) should not create two rows.
+    The primary dedup key remains (platform, external_id); this is an extra
+    guard for games that appear on both stores with identical titles.
+    """
+    from sqlalchemy import func as sa_func
+
+    return session.scalar(
+        select(Game.id).where(
+            sa_func.lower(Game.title) == title.strip().lower()
+        ).limit(1)
+    ) is not None
+
+
 def discover_steam(limit: int = MAX_NEW_PER_CYCLE) -> int:
     """Discovery Steam: explore/new -> nuovi appid -> games + snapshot discovery.
 
@@ -148,6 +167,14 @@ def discover_steam(limit: int = MAX_NEW_PER_CYCLE) -> int:
         with session_scope() as session:
             # Ricontrolla dedup dentro la transazione (idempotenza).
             if get_game(session, Platform.STEAM, appid) is not None:
+                continue
+            # Cross-platform title dedup: skip if same title already tracked
+            # (e.g. game already discovered on itch with same title).
+            if details.name and _title_exists(session, details.name):
+                logger.info(
+                    "Skip appid=%s: titolo %r gia' presente (altro platform)",
+                    appid, details.name,
+                )
                 continue
             game = upsert_steam_game(session, details, steamspy=spy)
             session.flush()  # assegna game.id
@@ -201,6 +228,14 @@ def discover_itch(limit: int = MAX_NEW_PER_CYCLE) -> int:
 
         with session_scope() as session:
             if get_game(session, Platform.ITCH, item.url) is not None:
+                continue
+            # Cross-platform title dedup: skip if same title already tracked
+            # (e.g. game already discovered on Steam with same title).
+            if data.title and _title_exists(session, data.title):
+                logger.info(
+                    "Skip itch %s: titolo %r gia' presente (altro platform)",
+                    item.url, data.title,
+                )
                 continue
             game = upsert_itch_game(session, data)
             session.flush()

@@ -200,6 +200,8 @@ def build_game_report(
     lines.append("## " + t("section_overview", lang))
     if game.get("developer"):
         lines.append(t("overview_developer", lang, developer=game["developer"]))
+    if game.get("release_date"):
+        lines.append(t("overview_release_date", lang, date=_fmt_date(game["release_date"], lang)))
     genres = ", ".join((game.get("genres") or []) + (game.get("tags") or [])) \
         or t("not_available", lang)
     lines.append(t("overview_genres", lang, genres=genres))

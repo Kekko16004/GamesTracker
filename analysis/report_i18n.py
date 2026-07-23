@@ -99,6 +99,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "Generi/tag: {genres}.",
         "en": "Genres/tags: {genres}.",
     },
+    "overview_release_date": {
+        "it": "**Data di uscita:** {date}",
+        "en": "**Release date:** {date}",
+    },
     "overview_quality": {
         "it": "Quality score attuale: {score}/100{discarded}.",
         "en": "Current quality score: {score}/100{discarded}.",

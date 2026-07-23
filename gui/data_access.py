@@ -287,7 +287,7 @@ class GameRepository:
         possiamo affermare che siano sotto soglia).
         """
         with self._session() as session:
-            stmt = select(Game)
+            stmt = select(Game).distinct()
             if not include_discarded:
                 stmt = stmt.where(Game.discarded.is_(False))
             if platform:
@@ -303,6 +303,14 @@ class GameRepository:
                 stmt = stmt.limit(limit)
 
             games = list(session.execute(stmt).scalars().all())
+            # Secondary dedup by game id in case ORM identity map returns dupes.
+            seen_ids: set[int] = set()
+            deduped: list[Game] = []
+            for g in games:
+                if g.id not in seen_ids:
+                    seen_ids.add(g.id)
+                    deduped.append(g)
+            games = deduped
 
             rows: list[GameRow] = []
             for game in games:

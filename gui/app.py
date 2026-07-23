@@ -100,6 +100,27 @@ class MainWindow(QMainWindow):
         self._view_menu.addAction(self._act_reports)
         self._view_menu.addAction(self._act_simulator)
 
+        # Menu Tema con gruppo esclusivo.
+        from gui.theme import DARK_THEME, LIGHT_THEME
+        self._theme_menu = menubar.addMenu("")
+        self._theme_group = QActionGroup(self)
+        self._theme_group.setExclusive(True)
+        self._act_dark = QAction("Scuro / Dark", self)
+        self._act_dark.setCheckable(True)
+        self._act_dark.setChecked(True)
+        self._act_light = QAction("Chiaro / Light", self)
+        self._act_light.setCheckable(True)
+        self._theme_group.addAction(self._act_dark)
+        self._theme_group.addAction(self._act_light)
+        self._theme_menu.addAction(self._act_dark)
+        self._theme_menu.addAction(self._act_light)
+        self._act_dark.triggered.connect(
+            lambda: QApplication.instance().setStyleSheet(DARK_THEME)
+        )
+        self._act_light.triggered.connect(
+            lambda: QApplication.instance().setStyleSheet(LIGHT_THEME)
+        )
+
         # Menu Lingua con gruppo esclusivo.
         self._lang_menu = menubar.addMenu("")
         self._lang_group = QActionGroup(self)
@@ -135,6 +156,7 @@ class MainWindow(QMainWindow):
         self._act_reports.setText(tr("nav.reports"))
         self._act_simulator.setText(tr("nav.simulator"))
         self._view_menu.setTitle(tr("app.menu.view"))
+        self._theme_menu.setTitle(tr("app.menu.theme"))
         self._lang_menu.setTitle(tr("app.menu.language"))
         # Sincronizza il check della lingua attiva.
         for code, act in self._lang_actions.items():
@@ -167,6 +189,8 @@ def run(argv: list[str] | None = None) -> int:
         pass
 
     app = QApplication(argv)
+    from gui.theme import DARK_THEME
+    app.setStyleSheet(DARK_THEME)
     window = MainWindow()
     window.show()
     return app.exec()
