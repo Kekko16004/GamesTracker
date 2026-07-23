@@ -292,7 +292,15 @@ Return a JSON object:
     {{
       "context": "community_post",
       "text": "<hook text>"
-    }}
-  ]
 }}
 """
+
+PROMPT_TEMPLATES: dict[str, str] = {
+    "description": DESCRIPTION_PROMPT.replace("{game_brief}", "{brief}"),
+    "titles": TITLES_PROMPT.replace("{game_brief}", "{brief}"),
+    "image_prompts": IMAGE_PROMPTS_PROMPT.replace("{game_brief}", "{brief}"),
+    "tags": TAGS_PROMPT.replace("{game_brief}", "{brief}"),
+    "marketing": MARKETING_PROMPT.replace("{game_brief}", "{brief}"),
+}
+
+

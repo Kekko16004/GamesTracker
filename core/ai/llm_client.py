@@ -73,8 +73,11 @@ class LLMConfig:
     model: str = ""
     max_tokens: int = 4096
     temperature: float = 0.7
+    max_retries: int = 3
+    retry_delay: float = 0.0
 
     @property
+
     def effective_base_url(self) -> str:
         """Return the base URL to use -- explicit override wins, otherwise
         look up the provider in the pre-configured table."""
@@ -94,6 +97,11 @@ class LLMConfig:
     def is_configured(self) -> bool:
         """True when the minimum requirements are met (key + reachable URL)."""
         return bool(self.api_key and self.effective_base_url)
+
+
+    def resolved_base_url(self) -> str:
+        """Return the effective base URL for compatibility."""
+        return self.effective_base_url
 
 
 def load_llm_config(env_file: Path | str | None = None) -> LLMConfig:
@@ -133,10 +141,14 @@ def load_llm_config(env_file: Path | str | None = None) -> LLMConfig:
         provider=_s("AI_PROVIDER", "openrouter"),
         api_key=_s("AI_API_KEY"),
         base_url=_s("AI_BASE_URL"),
-        model=_s("AI_MODEL"),
+        model=_s("AI_MODEL", "anthropic/claude-sonnet-4"),
         max_tokens=_i("AI_MAX_TOKENS", 4096),
         temperature=_f("AI_TEMPERATURE", 0.7),
     )
+
+
+
+load_config = load_llm_config
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +159,17 @@ def load_llm_config(env_file: Path | str | None = None) -> LLMConfig:
 class LLMError(RuntimeError):
     """Base exception for LLM client errors."""
 
+    def __init__(self, message: str = "", status_code: int = 0) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class LLMAuthError(LLMError):
     """Raised on 401 / 403 responses (bad API key or insufficient quota)."""
+
+    def __init__(self, message: str = "", status_code: int = 401) -> None:
+        super().__init__(message, status_code=status_code)
+
 
 
 class LLMRateLimitError(LLMError):
@@ -158,6 +178,13 @@ class LLMRateLimitError(LLMError):
 
 class LLMResponseError(LLMError):
     """Raised when the response body cannot be parsed or is missing content."""
+
+
+MissingAPIKeyError = LLMAuthError
+AuthError = LLMAuthError
+RateLimitError = LLMRateLimitError
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +219,38 @@ class LLMClient:
 
     # -- public API ---------------------------------------------------------
 
-    async def chat(
+    def chat(
+        self,
+        messages: list[dict[str, str]] | str,
+        system_message: str | None = None,
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_format: dict[str, str] | None = None,
+    ) -> Any:
+        """Send a chat completion request and return the assistant's text."""
+        if not self.config.api_key:
+            raise LLMAuthError("API key is required")
+
+        if isinstance(messages, str):
+            msgs: list[dict[str, str]] = []
+            if system_message:
+                msgs.append({"role": "system", "content": system_message})
+            msgs.append({"role": "user", "content": messages})
+        else:
+            msgs = list(messages)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            return self._chat_async(msgs, temperature=temperature, max_tokens=max_tokens, response_format=response_format)
+        else:
+            return self._chat_sync(msgs, temperature=temperature, max_tokens=max_tokens, response_format=response_format)
+
+    async def _chat_async(
         self,
         messages: list[dict[str, str]],
         *,
@@ -200,37 +258,6 @@ class LLMClient:
         max_tokens: int | None = None,
         response_format: dict[str, str] | None = None,
     ) -> str:
-        """Send a chat completion request and return the assistant's text.
-
-        Parameters
-        ----------
-        messages:
-            OpenAI-style message list
-            (``[{"role": "system", "content": "..."}, ...]``).
-        temperature:
-            Override the config-level temperature for this call.
-        max_tokens:
-            Override the config-level max_tokens for this call.
-        response_format:
-            Optional ``{"type": "json_object"}`` to enable JSON mode on
-            providers that support it.
-
-        Returns
-        -------
-        str
-            The text content of the first choice.
-
-        Raises
-        ------
-        LLMAuthError
-            On 401/403.
-        LLMRateLimitError
-            When retries on 429 are exhausted.
-        LLMResponseError
-            When the response cannot be parsed.
-        LLMError
-            On any other transport / server error.
-        """
         payload: dict[str, Any] = {
             "model": self.config.effective_model,
             "messages": messages,
@@ -243,6 +270,49 @@ class LLMClient:
         data = await self._request_with_retry(payload)
         return self._extract_content(data)
 
+    def _chat_sync(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_format: dict[str, str] | None = None,
+    ) -> str:
+        url = f"{self.config.effective_base_url.rstrip('/')}/chat/completions"
+        headers = self._build_headers(self.config)
+        payload: dict[str, Any] = {
+            "model": self.config.effective_model,
+            "messages": messages,
+            "temperature": temperature if temperature is not None else self.config.temperature,
+            "max_tokens": max_tokens if max_tokens is not None else self.config.max_tokens,
+        }
+        if response_format:
+            payload["response_format"] = response_format
+
+        attempts = 0
+        while True:
+            try:
+                resp = httpx.post(url, json=payload, headers=headers, timeout=30.0)
+            except Exception as exc:
+                raise LLMError(f"HTTP request failed: {exc}") from exc
+
+            if resp.status_code in (401, 403):
+                raise LLMAuthError(f"Authentication failed (HTTP {resp.status_code}): {resp.text}", status_code=resp.status_code)
+
+            if resp.status_code in _RETRYABLE_STATUSES:
+                if attempts < len(_BACKOFF_SCHEDULE):
+                    attempts += 1
+                    continue
+                raise LLMRateLimitError(f"Rate limit / server error (HTTP {resp.status_code})")
+            if resp.status_code != 200:
+                raise LLMResponseError(f"HTTP error {resp.status_code}: {resp.text}")
+
+            try:
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+            except Exception as exc:
+                raise LLMResponseError(f"Malformed response: {exc}") from exc
+
     async def chat_json(
         self,
         messages: list[dict[str, str]],
@@ -250,23 +320,23 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> dict[str, Any]:
-        """Like :meth:`chat` but parses the response as JSON.
-
-        Automatically enables ``response_format: json_object`` for providers
-        that support it, and falls back to plain extraction + ``json.loads``
-        for those that do not.
-        """
-        text = await self.chat(
+        """Like :meth:`chat` but parses the response as JSON."""
+        res = self.chat(
             messages,
             temperature=temperature,
             max_tokens=max_tokens,
             response_format={"type": "json_object"},
         )
+        if asyncio.iscoroutine(res):
+            text = await res
+        else:
+            text = res
         return self._parse_json(text)
 
     async def close(self) -> None:
         """Cleanly shut down the underlying httpx client."""
         await self._http.aclose()
+
 
     # -- context manager ----------------------------------------------------
 

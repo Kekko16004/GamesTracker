@@ -40,25 +40,41 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class GameBrief:
-    """Everything the user tells us about the game they are building.
+    """Everything the user tells us about the game they are building."""
 
-    Only ``game_description`` is required.  Every other field enriches the
-    context the AI uses to generate better output.
-    """
-
-    game_description: str
+    game_description: str = ""
+    name: str | None = None
     genre: str | None = None
+    genres: list[str] = field(default_factory=list)
     mechanics: list[str] = field(default_factory=list)
     art_style: str | None = None
     target_audience: str | None = None
     similar_games: list[str] = field(default_factory=list)
+    developers: list[str] = field(default_factory=list)
+    price: float | None = None
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> GameBrief:
+        known = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
+        if "description" in d and not known.get("game_description"):
+            known["game_description"] = d["description"]
+        if "name" in d and not known.get("game_description"):
+            known["game_description"] = str(d["name"])
+        return cls(**known)
 
     def to_context_block(self) -> str:
-        """Serialise the brief into a human-readable block for prompt
-        injection."""
-        lines: list[str] = [f"Description: {self.game_description}"]
+        """Serialise the brief into a human-readable block for prompt injection."""
+        lines: list[str] = []
+        if self.name:
+            lines.append(f"Name: {self.name}")
+        if self.game_description:
+            lines.append(f"Description: {self.game_description}")
         if self.genre:
             lines.append(f"Genre: {self.genre}")
+        elif self.genres:
+            lines.append(f"Genres: {', '.join(self.genres)}")
+        if self.price is not None:
+            lines.append(f"Price: ${self.price:.2f}" if self.price > 0 else "Price: Free to Play")
         if self.mechanics:
             lines.append(f"Core mechanics: {', '.join(self.mechanics)}")
         if self.art_style:
@@ -68,6 +84,54 @@ class GameBrief:
         if self.similar_games:
             lines.append(f"Similar games: {', '.join(self.similar_games)}")
         return "\n".join(lines)
+
+
+
+@dataclass
+class DescriptionResult:
+    short: str = ""
+    long: str = ""
+
+    def to_dict(self) -> dict[str, str]:
+        return {"short": self.short, "long": self.long}
+
+
+@dataclass
+class ImagePromptsResult:
+    capsule: str = ""
+    header: str = ""
+    screenshots: list[str] = field(default_factory=list)
+    avatar: str = ""
+    library_hero: str = ""
+
+    def __getitem__(self, key: str) -> Any:
+        if key == "screenshots":
+            return self.screenshots
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(key)
+
+    def __contains__(self, key: str) -> bool:
+        return key == "screenshots" or hasattr(self, key)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "capsule": self.capsule,
+            "header": self.header,
+            "screenshots": self.screenshots,
+            "avatar": self.avatar,
+            "library_hero": self.library_hero,
+        }
+
+
+
+@dataclass
+class MarketingResult:
+    pitch: str = ""
+    hooks: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"pitch": self.pitch, "hooks": self.hooks}
 
 
 @dataclass
@@ -82,6 +146,18 @@ class CopilotResult:
     marketing_hooks: list[dict[str, str]] = field(default_factory=list)
     elevator_pitch: str = ""
 
+    def __getitem__(self, key: str) -> Any:
+        if key == "description":
+            return {"short": self.steam_description_short, "long": self.steam_description_long}
+        if key == "marketing":
+            return {"hooks": self.marketing_hooks, "elevator_pitch": self.elevator_pitch}
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(key)
+
+    def __contains__(self, key: str) -> bool:
+        return key in ("description", "titles", "image_prompts", "tags", "marketing") or hasattr(self, key)
+
 
 # ---------------------------------------------------------------------------
 # GameCopilot
@@ -89,174 +165,147 @@ class CopilotResult:
 
 
 class GameCopilot:
-    """Orchestrates all AI generation tasks for a game.
-
-    Parameters
-    ----------
-    client:
-        An :class:`LLMClient` instance.  If *None*, the module-level singleton
-        returned by :func:`get_llm_client` is used.
-    trending_data:
-        Optional dictionary with trending market intelligence from the
-        database.  Keys used (all optional):
-
-        - ``trending_genres`` -- list of ``{"genre": str, "velocity": int}``
-        - ``trending_tags`` -- list of str
-        - ``avg_price`` -- float
-        - ``median_reviews`` -- int
-    """
+    """Orchestrates all AI generation tasks for a game."""
 
     def __init__(
         self,
+        brief: GameBrief | str | dict | LLMClient | None = None,
         client: LLMClient | None = None,
         trending_data: dict[str, Any] | None = None,
     ) -> None:
+        if isinstance(brief, LLMClient):
+            client = brief
+            brief = None
+        elif isinstance(brief, str):
+            brief = GameBrief(game_description=brief)
+        elif isinstance(brief, dict):
+            brief = GameBrief.from_dict(brief)
+
+        self.brief: GameBrief | None = brief
         self._client: LLMClient = client or get_llm_client()
         self._trending_data: dict[str, Any] = trending_data or {}
 
+    def build_brief(self, game: GameBrief | dict[str, Any] | str | None = None) -> str:
+        target = game if game is not None else self.brief
+        if isinstance(target, GameBrief):
+            return target.to_context_block()
+        if isinstance(target, dict):
+            return GameBrief.from_dict(target).to_context_block()
+        return str(target or "")
+
+    def _resolve_brief(self, brief: GameBrief | dict | str | None) -> GameBrief:
+        b = brief if brief is not None else self.brief
+        if isinstance(b, GameBrief):
+            return b
+        if isinstance(b, dict):
+            return GameBrief.from_dict(b)
+        if isinstance(b, str):
+            return GameBrief(game_description=b)
+        return GameBrief()
+
     # -- Public API ---------------------------------------------------------
 
-    async def generate_all(self, brief: GameBrief) -> CopilotResult:
-        """Run every generator in parallel and return a :class:`CopilotResult`.
+    def generate_all(self, brief: GameBrief | dict | str | None = None) -> CopilotResult:
+        target_brief = self._resolve_brief(brief)
+        desc_out = self.generate_description(target_brief)
+        titles_out = self.generate_titles(target_brief)
+        images_out = self.generate_image_prompts(target_brief)
+        tags_out = self.generate_tags(target_brief)
+        marketing_out = self.generate_marketing(target_brief)
 
-        Individual failures are logged but do not abort the whole run --
-        the result will contain empty strings / lists for the failed parts.
-        """
         result = CopilotResult()
-
-        # Fan-out all five generators concurrently.
-        desc_task = asyncio.create_task(
-            self._safe(self.generate_description(brief), "description")
-        )
-        titles_task = asyncio.create_task(
-            self._safe(self.generate_titles(brief), "titles")
-        )
-        images_task = asyncio.create_task(
-            self._safe(self.generate_image_prompts(brief), "image_prompts")
-        )
-        tags_task = asyncio.create_task(
-            self._safe(self.generate_tags(brief), "tags")
-        )
-        marketing_task = asyncio.create_task(
-            self._safe(self.generate_marketing(brief), "marketing")
-        )
-
-        desc_out, titles_out, images_out, tags_out, marketing_out = await asyncio.gather(
-            desc_task, titles_task, images_task, tags_task, marketing_task,
-        )
-
-        # Unpack results (safe wrappers return None on failure).
-        if desc_out is not None:
-            result.steam_description_short, result.steam_description_long = desc_out
-
-        if titles_out is not None:
+        if desc_out:
+            result.steam_description_short = desc_out.short
+            result.steam_description_long = desc_out.long
+        if titles_out:
             result.titles = titles_out
-
-        if images_out is not None:
-            result.image_prompts = images_out
-
-        if tags_out is not None:
+        if images_out:
+            result.image_prompts = images_out.to_dict()
+        if tags_out:
             result.tags = tags_out
-
-        if marketing_out is not None:
-            result.elevator_pitch, result.marketing_hooks = marketing_out
-
+        if marketing_out:
+            result.elevator_pitch = marketing_out.pitch
+            result.marketing_hooks = marketing_out.hooks
         return result
 
     # -- Individual generators ----------------------------------------------
 
-    async def generate_description(
-        self, brief: GameBrief
-    ) -> tuple[str, str]:
-        """Generate short + long Steam store descriptions.
-
-        Returns
-        -------
-        tuple[str, str]
-            ``(short_description, long_description)``
-        """
+    def generate_description(
+        self, brief: GameBrief | dict | str | None = None
+    ) -> DescriptionResult:
+        target_brief = self._resolve_brief(brief)
         prompt = DESCRIPTION_PROMPT.format(
-            game_brief=brief.to_context_block(),
+            game_brief=target_brief.to_context_block(),
             trending_context=self._build_trending_context(),
         )
-        data = await self._call_json(prompt)
-        return (
-            data.get("short_description", ""),
-            data.get("long_description", ""),
-        )
+        data = self._call_json(prompt)
+        if isinstance(data, dict):
+            short = data.get("short_description") or data.get("short", "")
+            long = data.get("long_description") or data.get("long", "")
+        else:
+            short, long = "", ""
+        return DescriptionResult(short=short, long=long)
 
-    async def generate_titles(
-        self, brief: GameBrief, count: int = 10
-    ) -> list[dict[str, Any]]:
-        """Generate *count* alternative game titles ranked by market fit.
-
-        Each entry is ``{"name": str, "reasoning": str, "score": int}``.
-        """
+    def generate_titles(
+        self, brief: GameBrief | dict | str | None = None, count: int = 10
+    ) -> list[dict[str, Any]] | list[str]:
+        target_brief = self._resolve_brief(brief)
         prompt = TITLES_PROMPT.format(
             count=count,
-            game_brief=brief.to_context_block(),
+            game_brief=target_brief.to_context_block(),
             trending_context=self._build_trending_context(),
         )
-        data = await self._call_json(prompt)
-        titles: list[dict[str, Any]] = data.get("titles", [])
-        # Ensure descending sort by score even if the model did not.
-        titles.sort(key=lambda t: t.get("score", 0), reverse=True)
+        data = self._call_json(prompt)
+        titles = data if isinstance(data, list) else (data.get("titles", []) if isinstance(data, dict) else [])
+        if isinstance(titles, list) and titles and isinstance(titles[0], dict):
+            titles.sort(key=lambda t: t.get("score", 0), reverse=True)
         return titles
 
-    async def generate_image_prompts(
-        self, brief: GameBrief
-    ) -> dict[str, str]:
-        """Generate image-generation prompts for every Steam asset type.
-
-        Returns a dict keyed by asset name (``capsule_main``, ``header_image``,
-        ``library_hero``, ``screenshot_1`` etc.).
-        """
+    def generate_image_prompts(
+        self, brief: GameBrief | dict | str | None = None
+    ) -> ImagePromptsResult:
+        target_brief = self._resolve_brief(brief)
         prompt = IMAGE_PROMPTS_PROMPT.format(
-            game_brief=brief.to_context_block(),
+            game_brief=target_brief.to_context_block(),
         )
-        data = await self._call_json(prompt)
-        # Ensure all expected keys exist (fill missing with empty string).
-        expected_keys = [
-            "capsule_main",
-            "capsule_small",
-            "header_image",
-            "library_hero",
-            "screenshot_1",
-            "screenshot_2",
-            "screenshot_3",
-        ]
-        return {k: data.get(k, "") for k in expected_keys}
+        data = self._call_json(prompt)
+        if isinstance(data, dict):
+            capsule = data.get("capsule") or data.get("capsule_main", "")
+            header = data.get("header") or data.get("header_image", "")
+            avatar = data.get("avatar") or data.get("library_hero", "")
+            library_hero = data.get("library_hero") or data.get("avatar", "")
+            screenshots = data.get("screenshots") or [v for k, v in data.items() if k.startswith("screenshot")]
+        else:
+            capsule, header, avatar, library_hero, screenshots = "", "", "", "", []
+        return ImagePromptsResult(capsule=capsule, header=header, screenshots=screenshots, avatar=avatar, library_hero=library_hero)
 
-    async def generate_tags(self, brief: GameBrief) -> list[str]:
-        """Generate an optimised list of 20 Steam tags sorted by priority."""
+
+    def generate_tags(self, brief: GameBrief | dict | str | None = None) -> list[str]:
+        target_brief = self._resolve_brief(brief)
         prompt = TAGS_PROMPT.format(
-            game_brief=brief.to_context_block(),
+            game_brief=target_brief.to_context_block(),
             trending_context=self._build_trending_context(),
         )
-        data = await self._call_json(prompt)
-        tags: list[str] = data.get("tags", [])
+        data = self._call_json(prompt)
+        tags = data if isinstance(data, list) else (data.get("tags", []) if isinstance(data, dict) else [])
         return tags
 
-    async def generate_marketing(
-        self, brief: GameBrief
-    ) -> tuple[str, list[dict[str, str]]]:
-        """Generate elevator pitch and marketing hooks.
-
-        Returns
-        -------
-        tuple[str, list[dict[str, str]]]
-            ``(elevator_pitch, hooks)`` where each hook is
-            ``{"context": str, "text": str}``.
-        """
+    def generate_marketing(
+        self, brief: GameBrief | dict | str | None = None
+    ) -> MarketingResult:
+        target_brief = self._resolve_brief(brief)
         prompt = MARKETING_PROMPT.format(
-            game_brief=brief.to_context_block(),
+            game_brief=target_brief.to_context_block(),
             trending_context=self._build_trending_context(),
         )
-        data = await self._call_json(prompt)
-        return (
-            data.get("elevator_pitch", ""),
-            data.get("hooks", []),
-        )
+        data = self._call_json(prompt)
+        if isinstance(data, dict):
+            pitch = data.get("elevator_pitch") or data.get("pitch", "")
+            hooks = data.get("hooks", [])
+        else:
+            pitch, hooks = "", []
+        return MarketingResult(pitch=pitch, hooks=hooks)
+
 
     # -- Trending context builder -------------------------------------------
 
@@ -300,13 +349,26 @@ class GameCopilot:
 
     # -- Internal helpers ---------------------------------------------------
 
-    async def _call_json(self, user_prompt: str) -> dict[str, Any]:
+    def _call_json(self, user_prompt: str) -> dict[str, Any]:
         """Send a system + user message pair and parse the JSON reply."""
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
-        return await self._client.chat_json(messages)
+        res = self._client.chat(user_prompt, system_message=SYSTEM_PROMPT)
+        if isinstance(res, str):
+            import json
+            cleaned = res.strip()
+            if cleaned.startswith("```json"):
+                cleaned = cleaned[7:]
+            if cleaned.startswith("```"):
+                cleaned = cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            try:
+                return json.loads(cleaned.strip())
+            except Exception as e:
+                raise LLMResponseError(f"Malformed JSON: {e}")
+        if isinstance(res, dict):
+            return res
+        return {}
+
 
     @staticmethod
     async def _safe(coro: Any, label: str) -> Any:
