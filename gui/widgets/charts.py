@@ -20,18 +20,19 @@ from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from gui.i18n import tr
 
-# Configurazione estetica globale pyqtgraph: sfondo chiaro, testo scuro
-# (contrasto adeguato per accessibilita').
-pg.setConfigOption("background", "w")
-pg.setConfigOption("foreground", "#222222")
+# Configurazione estetica globale pyqtgraph: sfondo dark coerente con il
+# tema della GUI. Testo chiaro per contrasto su sfondo scuro.
+pg.setConfigOption("background", "#242836")
+pg.setConfigOption("foreground", "#e4e7ef")
 pg.setConfigOptions(antialias=True)
 
-# Palette ad alto contrasto, distinguibile anche in scala di grigi.
-_DEMO_COLOR = "#1b7837"
-_RELEASE_COLOR = "#762a83"
-_POST_COLOR = "#e08214"
-_REVIEW_COLOR = "#2166ac"
-_PLAYER_COLOR = "#b2182b"
+# Palette ad alto contrasto, ottimizzata per sfondo scuro (#242836).
+_DEMO_COLOR = "#4ade80"     # verde brillante
+_RELEASE_COLOR = "#c084fc"  # viola chiaro
+_POST_COLOR = "#fb923c"     # arancione
+_REVIEW_COLOR = "#60a5fa"   # blu chiaro
+_PLAYER_COLOR = "#f87171"   # rosso chiaro
+_BAR_COLOR = "#6366f1"      # indigo (accent del tema)
 
 
 def _to_timestamp(dt: datetime) -> float:
@@ -143,7 +144,7 @@ class BarChart(QWidget):
             return
         xs = list(range(len(labels)))
         bar = pg.BarGraphItem(
-            x=xs, height=list(values), width=0.6, brush=_REVIEW_COLOR
+            x=xs, height=list(values), width=0.6, brush=_BAR_COLOR
         )
         self._plot.addItem(bar)
         axis = self._plot.getAxis("bottom")
@@ -166,7 +167,7 @@ class BarChart(QWidget):
             return
         xs = list(range(len(labels)))
         heights = [float(v) for v in values]
-        bar = pg.BarGraphItem(x=xs, height=heights, width=0.6, brush=_REVIEW_COLOR)
+        bar = pg.BarGraphItem(x=xs, height=heights, width=0.6, brush=_BAR_COLOR)
         self._plot.addItem(bar)
 
         axis = self._plot.getAxis("bottom")
@@ -185,6 +186,24 @@ class BarChart(QWidget):
 
 
 # --- Helper matplotlib per figure statiche (export report) ----------------
+
+
+# Colori matplotlib per tema dark (coerenti con pyqtgraph).
+_MPL_BG = "#242836"
+_MPL_FG = "#e4e7ef"
+_MPL_GRID = "#2e3347"
+
+
+def _apply_dark_style(fig, ax) -> None:
+    """Applica il tema dark a una figure matplotlib."""
+    fig.set_facecolor(_MPL_BG)
+    ax.set_facecolor(_MPL_BG)
+    ax.tick_params(colors=_MPL_FG)
+    ax.xaxis.label.set_color(_MPL_FG)
+    ax.yaxis.label.set_color(_MPL_FG)
+    ax.title.set_color(_MPL_FG)
+    for spine in ax.spines.values():
+        spine.set_color(_MPL_GRID)
 
 
 def build_growth_figure(points: Sequence, title: str = ""):
@@ -209,8 +228,10 @@ def build_growth_figure(points: Sequence, title: str = ""):
     ax.set_ylabel(tr("common.reviews"))
     if title:
         ax.set_title(title)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="best")
+    ax.grid(True, alpha=0.15, color=_MPL_GRID)
+    ax.legend(loc="best", facecolor=_MPL_BG, edgecolor=_MPL_GRID,
+              labelcolor=_MPL_FG)
+    _apply_dark_style(fig, ax)
     fig.autofmt_xdate()
     fig.tight_layout()
     return fig
@@ -223,11 +244,12 @@ def build_bar_figure(labels: Sequence[str], values: Sequence[int], title: str = 
     fig = Figure(figsize=(8, 4.5), dpi=100)
     ax = fig.add_subplot(111)
     if labels:
-        ax.bar(range(len(labels)), list(values), color=_REVIEW_COLOR)
+        ax.bar(range(len(labels)), list(values), color=_BAR_COLOR)
         ax.set_xticks(range(len(labels)))
-        ax.set_xticklabels(labels, rotation=30, ha="right")
+        ax.set_xticklabels(labels, rotation=30, ha="right", color=_MPL_FG)
     if title:
         ax.set_title(title)
-    ax.grid(True, axis="y", alpha=0.3)
+    ax.grid(True, axis="y", alpha=0.15, color=_MPL_GRID)
+    _apply_dark_style(fig, ax)
     fig.tight_layout()
     return fig

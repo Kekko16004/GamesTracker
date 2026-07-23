@@ -69,6 +69,19 @@ class ReportsView(QWidget):
             [
                 Column("common.title", lambda r: r.game_title or r.genre or ""),
                 Column("reports.scope.game", _scope),
+                Column(
+                    "common.quality_score",
+                    lambda r: (
+                        f"{r.quality_score:.1f}"
+                        if r.quality_score is not None
+                        else tr("common.na")
+                    ),
+                    align_right=True,
+                ),
+                Column(
+                    "common.release_date",
+                    lambda r: r.release_date or tr("common.na"),
+                ),
                 Column("app.language", lambda r: r.lang),
                 Column(
                     "reports.generated_at",

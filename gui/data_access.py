@@ -161,6 +161,8 @@ class ReportRow:
     lang: str
     generated_at: Optional[datetime]
     summary_preview: str
+    quality_score: Optional[float] = None
+    release_date: Optional[str] = None
 
 
 @dataclass
@@ -640,9 +642,16 @@ class GameRepository:
             rows: list[ReportRow] = []
             for rep in reports:
                 title = None
+                q_score = None
+                rel_date = None
                 if rep.game_id is not None:
                     game = session.get(Game, rep.game_id)
-                    title = game.title if game else None
+                    if game:
+                        title = game.title
+                        q_score = game.quality_score
+                        rd = getattr(game, "release_date", None)
+                        if rd is not None:
+                            rel_date = rd.isoformat() if hasattr(rd, "isoformat") else str(rd)
                 summary = rep.summary or ""
                 preview = summary if len(summary) <= 160 else summary[:157] + "..."
                 rows.append(
@@ -654,6 +663,8 @@ class GameRepository:
                         lang=rep.lang.value if hasattr(rep.lang, "value") else str(rep.lang),
                         generated_at=rep.generated_at,
                         summary_preview=preview,
+                        quality_score=q_score,
+                        release_date=rel_date,
                     )
                 )
             return rows
