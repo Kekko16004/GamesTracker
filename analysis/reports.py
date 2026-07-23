@@ -722,16 +722,51 @@ def generate_genre_report(session, genre: str, lang: str = "it",
 def save_report(session, report: dict[str, Any], lang: str,
                 game_id: Optional[int] = None,
                 genre: Optional[str] = None) -> int:
-    """Salva un report su ``analysis_reports`` e ritorna l'id.
+    """Salva o aggiorna un report su ``analysis_reports`` e ritorna l'id.
+
+    UPSERT: se esiste gia' un report per la stessa combinazione
+    (game_id, lang) o (genre, lang), lo AGGIORNA invece di crearne uno
+    nuovo. Questo evita la duplicazione dei report ad ogni snapshot.
 
     ``report`` e' il dict ``{"summary", "data"}`` prodotto dai builder.
     """
+    from sqlalchemy import select
+
     from core.models import AnalysisReport, Lang
 
+    lang_val = Lang(lang) if not isinstance(lang, Lang) else lang
+
+    # Cerca un report esistente per la stessa chiave logica.
+    existing = None
+    if game_id is not None:
+        existing = session.scalars(
+            select(AnalysisReport).where(
+                AnalysisReport.game_id == game_id,
+                AnalysisReport.lang == lang_val,
+            ).order_by(AnalysisReport.generated_at.desc()).limit(1)
+        ).first()
+    elif genre is not None:
+        existing = session.scalars(
+            select(AnalysisReport).where(
+                AnalysisReport.genre == genre,
+                AnalysisReport.lang == lang_val,
+                AnalysisReport.game_id.is_(None),
+            ).order_by(AnalysisReport.generated_at.desc()).limit(1)
+        ).first()
+
+    if existing is not None:
+        # Aggiorna il report esistente.
+        existing.summary = report.get("summary")
+        existing.data = report.get("data")
+        existing.generated_at = datetime.now(timezone.utc)
+        session.flush()
+        return existing.id
+
+    # Nessun report precedente: crea nuovo.
     row = AnalysisReport(
         game_id=game_id,
         genre=genre,
-        lang=Lang(lang) if not isinstance(lang, Lang) else lang,
+        lang=lang_val,
         summary=report.get("summary"),
         data=report.get("data"),
         generated_at=datetime.now(timezone.utc),

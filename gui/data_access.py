@@ -610,10 +610,28 @@ class GameRepository:
     # --- Query pubbliche: report ------------------------------------------
 
     def list_reports(self, *, limit: int | None = None) -> list[ReportRow]:
-        """Elenco report generati (piu' recenti prima), senza payload dati."""
+        """Elenco report generati (piu' recenti prima), senza payload dati.
+
+        Mostra solo l'ULTIMO report per ogni combinazione (game_id, lang)
+        o (genre, lang), cosi' i duplicati storici non appaiono nella lista.
+        """
+        from sqlalchemy import func
+
         with self._session() as session:
-            stmt = select(AnalysisReport).order_by(
-                AnalysisReport.generated_at.desc()
+            # Subquery: per ogni (game_id, genre, lang), il max(id) = ultimo report.
+            latest_ids_subq = (
+                select(func.max(AnalysisReport.id).label("max_id"))
+                .group_by(
+                    AnalysisReport.game_id,
+                    AnalysisReport.genre,
+                    AnalysisReport.lang,
+                )
+                .subquery()
+            )
+            stmt = (
+                select(AnalysisReport)
+                .where(AnalysisReport.id.in_(select(latest_ids_subq.c.max_id)))
+                .order_by(AnalysisReport.generated_at.desc())
             )
             if limit is not None:
                 stmt = stmt.limit(limit)
