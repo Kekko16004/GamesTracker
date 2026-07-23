@@ -50,9 +50,11 @@ class GameBrief:
     art_style: str | None = None
     target_audience: str | None = None
     similar_games: list[str] = field(default_factory=list)
-<<<<<<< HEAD
     developers: list[str] = field(default_factory=list)
+
     price: float | None = None
+    character_description: str | None = None
+    estimated_playtime_hours: float | None = None
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> GameBrief:
@@ -62,10 +64,7 @@ class GameBrief:
         if "name" in d and not known.get("game_description"):
             known["game_description"] = str(d["name"])
         return cls(**known)
-=======
-    character_description: str | None = None
-    estimated_playtime_hours: float | None = None
->>>>>>> feat: Twitch/Kick scrapers, character prompts, pricing AI, owner estimation
+
 
     def to_context_block(self) -> str:
         """Serialise the brief into a human-readable block for prompt injection."""
