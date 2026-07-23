@@ -3,16 +3,35 @@
 {% block title %}Dashboard — GamesTracker{% endblock %}
 
 {% block content %}
-<!-- ======== HEADER ======== -->
-<div class="page-header">
+<!-- ======== HEADER + SCAN NOW ======== -->
+<div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
   <div class="page-header__titles">
     <h1 class="page-header__h1">Dashboard</h1>
     <p class="page-header__sub">Tracking {{ stats.total_games }} games across all platforms</p>
   </div>
+  <div x-data="{ scanning: false, msg: '' }">
+    <button
+      class="btn btn--md btn--primary"
+      :disabled="scanning"
+      @click="
+        scanning = true; msg = '';
+        fetch('/scan', {method:'POST'})
+          .then(r => r.json())
+          .then(d => { msg = '✅ ' + d.message; setTimeout(() => location.reload(), 3000); })
+          .catch(e => { msg = '❌ Error'; })
+          .finally(() => { scanning = false; })
+      "
+    >
+      <span x-show="!scanning">🔄 Scan Now</span>
+      <span x-show="scanning" class="ai-spinner-inline"></span>
+      <span x-show="scanning">Scanning...</span>
+    </button>
+    <span x-show="msg" x-text="msg" style="margin-left:8px; font-size:.85rem;"></span>
+  </div>
 </div>
 
 <!-- ======== STATS STRIP ======== -->
-<div class="stats-strip" x-data="{ shown: false }" x-init="setTimeout(() => shown = true, 100)" x-show="true">
+<div class="stats-strip">
   <div class="stat-card stat-card--accent">
     <span class="stat-card__value mono">{{ stats.total_games }}</span>
     <span class="stat-card__label">Total Games</span>
@@ -31,78 +50,126 @@
   </div>
 </div>
 
-<!-- ======== FILTERS ======== -->
+<!-- ======== FILTERS (Advanced) ======== -->
 <form
-  class="filter-bar"
+  class="filter-bar filter-bar--advanced"
   hx-get="/"
   hx-target="#games-grid"
   hx-swap="outerHTML"
   hx-trigger="change, search, input delay:400ms"
   hx-push-url="true"
   hx-select="#games-grid"
+  x-data="{ expanded: false, minScore: {{ current_min_score }}, maxScore: {{ current_max_score }} }"
 >
-  <!-- Search -->
-  <div class="filter-bar__group filter-bar__group--wide">
-    <label class="filter-bar__label" for="search">Search</label>
-    <input
-      id="search"
-      name="search"
-      type="search"
-      class="filter-bar__input"
-      placeholder="Search game titles..."
-      value="{{ current_search }}"
-    />
+  <!-- Row 1: Main filters -->
+  <div class="filter-bar__row">
+    <!-- Search title -->
+    <div class="filter-bar__group filter-bar__group--wide">
+      <label class="filter-bar__label" for="search">🔍 Search</label>
+      <input id="search" name="search" type="search" class="filter-bar__input"
+        placeholder="Game title..." value="{{ current_search }}" />
+    </div>
+
+    <!-- Developer -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="developer">👤 Developer</label>
+      <input id="developer" name="developer" type="text" class="filter-bar__input"
+        placeholder="Developer name..." value="{{ current_developer }}" />
+    </div>
+
+    <!-- Platform -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="platform">Platform</label>
+      <select id="platform" name="platform" class="filter-bar__select">
+        <option value="">All</option>
+        <option value="steam" {% if current_platform == 'steam' %}selected{% endif %}>Steam</option>
+        <option value="itch" {% if current_platform == 'itch' %}selected{% endif %}>itch.io</option>
+      </select>
+    </div>
+
+    <!-- Sort -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="sort_by">Sort by</label>
+      <select id="sort_by" name="sort_by" class="filter-bar__select">
+        <option value="quality_score" {% if current_sort == 'quality_score' %}selected{% endif %}>Quality Score ↓</option>
+        <option value="growth"   {% if current_sort == 'growth'   %}selected{% endif %}>Growth ↓</option>
+        <option value="newest"   {% if current_sort == 'newest'   %}selected{% endif %}>Newest First</option>
+        <option value="recency"  {% if current_sort == 'recency'  %}selected{% endif %}>Release Date</option>
+        <option value="reviews"  {% if current_sort == 'reviews'  %}selected{% endif %}>Most Reviews</option>
+        <option value="players"  {% if current_sort == 'players'  %}selected{% endif %}>Most Players</option>
+        <option value="price"    {% if current_sort == 'price'    %}selected{% endif %}>Price ↑</option>
+        <option value="title"    {% if current_sort == 'title'    %}selected{% endif %}>Title A–Z</option>
+      </select>
+    </div>
+
+    <!-- Toggle advanced filters -->
+    <div class="filter-bar__group" style="align-self:flex-end;">
+      <button type="button" class="btn btn--sm btn--ghost" @click="expanded = !expanded">
+        <span x-text="expanded ? '▲ Less filters' : '▼ More filters'"></span>
+      </button>
+    </div>
   </div>
 
-  <!-- Platform -->
-  <div class="filter-bar__group">
-    <label class="filter-bar__label" for="platform">Platform</label>
-    <select id="platform" name="platform" class="filter-bar__select">
-      <option value="">All</option>
-      <option value="steam" {% if current_platform == 'steam' %}selected{% endif %}>Steam</option>
-      <option value="itch" {% if current_platform == 'itch' %}selected{% endif %}>itch.io</option>
-    </select>
-  </div>
+  <!-- Row 2: Advanced filters (expandable) -->
+  <div class="filter-bar__row" x-show="expanded" x-transition style="margin-top:12px;">
+    <!-- Genre -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="genre">Genre</label>
+      <select id="genre" name="genre" class="filter-bar__select">
+        <option value="">All genres</option>
+        {% for g in genres %}
+        <option value="{{ g }}" {% if current_genre == g %}selected{% endif %}>{{ g }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-  <!-- Genre -->
-  <div class="filter-bar__group">
-    <label class="filter-bar__label" for="genre">Genre</label>
-    <select id="genre" name="genre" class="filter-bar__select">
-      <option value="">All genres</option>
-      {% for g in genres %}
-      <option value="{{ g }}" {% if current_genre == g %}selected{% endif %}>{{ g }}</option>
-      {% endfor %}
-    </select>
-  </div>
+    <!-- Tag -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="tag">🏷️ Tag</label>
+      <select id="tag" name="tag" class="filter-bar__select">
+        <option value="">All tags</option>
+        {% for t in tags %}
+        <option value="{{ t }}" {% if current_tag == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-  <!-- Min score slider -->
-  <div class="filter-bar__group" x-data="{ score: {{ current_min_score }} }">
-    <label class="filter-bar__label" for="min_score">
-      Quality Score &ge; <span class="mono" x-text="score"></span>
-    </label>
-    <input
-      id="min_score"
-      name="min_score"
-      type="range"
-      min="0" max="100" step="5"
-      class="filter-bar__range"
-      x-model="score"
-      value="{{ current_min_score }}"
-    />
-    {% if current_min_score > 0 %}
-    <span class="filter-note">Including unscored games when score = 0</span>
-    {% endif %}
-  </div>
+    <!-- Quality Score range -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label">
+        Score: <span class="mono" x-text="minScore"></span> – <span class="mono" x-text="maxScore"></span>
+      </label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input name="min_score" type="range" min="0" max="100" step="5"
+          class="filter-bar__range" x-model="minScore" value="{{ current_min_score }}" style="flex:1;" />
+        <input name="max_score" type="range" min="0" max="100" step="5"
+          class="filter-bar__range" x-model="maxScore" value="{{ current_max_score }}" style="flex:1;" />
+      </div>
+    </div>
 
-  <!-- Sort -->
-  <div class="filter-bar__group">
-    <label class="filter-bar__label" for="sort_by">Sort</label>
-    <select id="sort_by" name="sort_by" class="filter-bar__select">
-      <option value="quality_score" {% if current_sort == 'quality_score' %}selected{% endif %}>Quality Score</option>
-      <option value="growth"        {% if current_sort == 'growth'        %}selected{% endif %}>Growth</option>
-      <option value="recency"       {% if current_sort == 'recency'       %}selected{% endif %}>Recent</option>
-      <option value="title"         {% if current_sort == 'title'         %}selected{% endif %}>Title A-Z</option>
-    </select>
+    <!-- Price range -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label">💰 Price ($)</label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input name="min_price" type="number" min="0" step="0.01" class="filter-bar__input"
+          placeholder="Min" value="{{ current_min_price }}" style="width:70px;" />
+        <span style="color:var(--text-secondary);">–</span>
+        <input name="max_price" type="number" min="0" step="0.01" class="filter-bar__input"
+          placeholder="Max" value="{{ current_max_price }}" style="width:70px;" />
+      </div>
+    </div>
+
+    <!-- Revenue flag -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="revenue">💸 Revenue</label>
+      <select id="revenue" name="revenue" class="filter-bar__select">
+        <option value="">All</option>
+        <option value="recouped" {% if current_revenue == 'recouped' %}selected{% endif %}>✅ Recouped</option>
+        <option value="not_recouped" {% if current_revenue == 'not_recouped' %}selected{% endif %}>❌ Not recouped</option>
+        <option value="likely_recouped" {% if current_revenue == 'likely_recouped' %}selected{% endif %}>🟡 Likely recouped</option>
+        <option value="free" {% if current_revenue == 'free' %}selected{% endif %}>🆓 Free</option>
+      </select>
+    </div>
   </div>
 </form>
 
@@ -119,9 +186,9 @@
     {% endfor %}
   {% else %}
   <div class="empty-state">
-    <div class="empty-state__icon">&#x1F3AE;</div>
+    <div class="empty-state__icon">🎮</div>
     <h3 class="empty-state__title">No games found</h3>
-    <p class="empty-state__sub">Try adjusting your filters or adding games through the desktop app.</p>
+    <p class="empty-state__sub">Try adjusting your filters, or click <strong>Scan Now</strong> to collect new games.</p>
   </div>
   {% endif %}
 </div>

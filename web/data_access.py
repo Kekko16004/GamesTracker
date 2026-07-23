@@ -176,82 +176,69 @@ def get_games_list(
     *,
     platform: Optional[str] = None,
     min_score: float = 0.0,
+    max_score: float = 100.0,
     sort_by: str = "quality_score",
     genre: Optional[str] = None,
+    tag: Optional[str] = None,
     search: Optional[str] = None,
+    developer: Optional[str] = None,
+    revenue_filter: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
     include_discarded: bool = False,
     limit: Optional[int] = None,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Return a filtered, sorted list of games as JSON-serializable dicts.
 
-    Parameters
-    ----------
-    platform:
-        Filter to 'steam' or 'itch'. None means all.
-    min_score:
-        Minimum quality score threshold (0.0 = include all).
-        Games with quality_score=None (unscored) are always included.
-        Only games that HAVE a score AND it is below the threshold are excluded.
-    sort_by:
-        One of 'quality_score', 'growth', 'recency', 'title'.
-    genre:
-        Filter to games containing this genre string.
-    search:
-        Case-insensitive title substring filter applied after DB query.
-    include_discarded:
-        Whether to include games marked as discarded.
-    limit:
-        Maximum number of results (None = no limit).
-    offset:
-        Number of rows to skip (for pagination).
+    Advanced filters:
+    - platform: 'steam' or 'itch'
+    - min_score / max_score: quality score range (NULL always passes)
+    - genre: primary genre filter
+    - tag: secondary tag filter (searches in genres + tags)
+    - search: title substring
+    - developer: developer name substring
+    - revenue_filter: 'recouped' | 'not_recouped' | 'free'
+    - min_price / max_price: price range filter
+    - sort_by: quality_score, growth, recency, title, reviews, players, price
     """
     repo = _get_repo()
-    # BUG 1 FIX: Always fetch all games (min_quality_score=0) so that unscored
-    # games (quality_score IS NULL) are not silently dropped by the DB filter.
-    # We apply the smart score filter in Python below.
     rows = repo.list_games(
         min_quality_score=0,
         platform=platform,
         genre=genre,
         include_discarded=include_discarded,
-        limit=None,   # we sort + slice in Python for flexible sort_by
+        limit=None,
         offset=0,
     )
 
-    # BUG 1 FIX: Post-filter — unscored games (None) always pass;
-    # only exclude games that HAVE a score below the threshold.
-    if min_score > 0:
-        rows = [r for r in rows if r.quality_score is None or r.quality_score >= min_score]
+    # Quality score range filter (NULL always passes).
+    if min_score > 0 or max_score < 100:
+        rows = [
+            r for r in rows
+            if r.quality_score is None
+            or (r.quality_score >= min_score and r.quality_score <= max_score)
+        ]
 
-    # Apply search filter.
+    # Title search filter.
     if search:
         needle = search.lower()
         rows = [r for r in rows if needle in r.title.lower()]
 
-    # Apply custom sort.
-    if sort_by == "growth":
-        rows.sort(key=lambda r: r.review_growth or 0, reverse=True)
-    elif sort_by == "recency":
-        # Sort by release_date descending; games without date go last.
-        rows.sort(
-            key=lambda r: (r.release_date is None, r.release_date or ""),
-            reverse=True,
-        )
-        # Fix: None pushed to end when we flip reverse on a bool
-        rows.sort(key=lambda r: r.release_date is None)
-    elif sort_by == "title":
-        rows.sort(key=lambda r: r.title.lower())
-    else:
-        # Default: quality_score descending, None last.
-        rows.sort(key=lambda r: (r.quality_score is None, -(r.quality_score or 0)))
+    # Developer search filter.
+    if developer:
+        dev_needle = developer.lower()
+        rows = [r for r in rows if r.developer and dev_needle in r.developer.lower()]
 
-    # Slice for pagination.
-    if offset:
-        rows = rows[offset:]
-    if limit is not None:
-        rows = rows[:limit]
+    # Tag filter (search in genres string).
+    if tag:
+        tag_needle = tag.lower()
+        rows = [
+            r for r in rows
+            if r.genres and tag_needle in r.genres.lower()
+        ]
 
+    # Build result dicts first (need price/revenue for filtering + sorting).
     result = []
     for r in rows:
         price = getattr(r, "price", None)
@@ -259,7 +246,57 @@ def get_games_list(
         revenue_flag = _compute_revenue_flag(
             price, is_free, r.latest_players, reviews=r.latest_reviews
         )
-        result.append({
+
+    # Price range filter (applied after revenue flag calculation).
+        price_val = float(price) if price is not None else None
+        if min_price is not None and (price_val is None or price_val < min_price):
+            continue
+        if max_price is not None and (price_val is None or price_val > max_price):
+            continue
+
+    # Revenue flag filter.
+        if revenue_filter:
+            if revenue_flag.get("flag") != revenue_filter:
+                continue
+
+        result.append({"_row": r, "price": price, "is_free": is_free,
+                        "revenue_flag": revenue_flag, "price_val": price_val})
+
+    # Apply custom sort.
+    if sort_by == "growth":
+        result.sort(key=lambda d: d["_row"].review_growth or 0, reverse=True)
+    elif sort_by == "recency":
+        result.sort(key=lambda d: d["_row"].release_date is None)
+        result.sort(
+            key=lambda d: d["_row"].release_date or "",
+            reverse=True,
+        )
+        result.sort(key=lambda d: d["_row"].release_date is None)
+    elif sort_by == "title":
+        result.sort(key=lambda d: d["_row"].title.lower())
+    elif sort_by == "reviews":
+        result.sort(key=lambda d: d["_row"].latest_reviews or 0, reverse=True)
+    elif sort_by == "players":
+        result.sort(key=lambda d: d["_row"].latest_players or 0, reverse=True)
+    elif sort_by == "price":
+        result.sort(key=lambda d: (d["price_val"] is None, d["price_val"] or 0))
+    elif sort_by == "newest":
+        result.sort(key=lambda d: d["_row"].release_date or "", reverse=True)
+        result.sort(key=lambda d: d["_row"].release_date is None)
+    else:
+        result.sort(key=lambda d: (d["_row"].quality_score is None, -(d["_row"].quality_score or 0)))
+
+    # Slice for pagination.
+    if offset:
+        result = result[offset:]
+    if limit is not None:
+        result = result[:limit]
+
+    # Build final output dicts.
+    final = []
+    for d in result:
+        r = d["_row"]
+        final.append({
             "id": r.id,
             "platform": r.platform,
             "external_id": r.external_id,
@@ -275,11 +312,11 @@ def get_games_list(
             "latest_reviews": r.latest_reviews,
             "latest_players": r.latest_players,
             "review_growth": r.review_growth,
-            "price": price,
-            "is_free": is_free,
-            "revenue_flag": revenue_flag,
+            "price": d["price"],
+            "is_free": d["is_free"],
+            "revenue_flag": d["revenue_flag"],
         })
-    return result
+    return final
 
 
 def get_game_detail(game_id: int) -> Optional[dict[str, Any]]:
@@ -593,3 +630,19 @@ def get_ai_context_data() -> dict[str, Any]:
         "top_games": top_titles,
         "genre_distribution": dict(dist),
     }
+
+def get_available_tags() -> list[str]:
+    """Return sorted list of all unique tags/genres across all games.
+
+    Splits comma-separated genre strings and collects every unique tag.
+    """
+    repo = _get_repo()
+    all_games = repo.list_games(min_quality_score=0, limit=None, offset=0)
+    tag_set: set[str] = set()
+    for g in all_games:
+        if g.genres:
+            for part in g.genres.split(","):
+                t = part.strip()
+                if t:
+                    tag_set.add(t)
+    return sorted(tag_set)

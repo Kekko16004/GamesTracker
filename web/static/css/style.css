@@ -1884,3 +1884,32 @@ button { font-family: inherit; }
 
 .form-hint { display: block; font-size: .75rem; color: var(--text-secondary, #9ca3b8); margin-top: 3px; }
 .price-value-note { margin-top: 8px; padding: 8px 12px; background: var(--surface-2, #242836); border-radius: 6px; font-size: .85rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ==========================================================================
+   ADVANCED FILTER BAR
+   ========================================================================== */
+
+.filter-bar--advanced {
+  display: flex;
+  flex-direction: column;
+}
+.filter-bar__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.filter-bar__row .filter-bar__group { min-width: 120px; }
+.filter-bar__row .filter-bar__group--wide { flex: 2; min-width: 200px; }
+
+.filter-note {
+  display: block;
+  font-size: .7rem;
+  color: var(--text-secondary, #9ca3b8);
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .filter-bar__row { flex-direction: column; }
+  .filter-bar__row .filter-bar__group { width: 100%; }
+}

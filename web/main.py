@@ -139,21 +139,33 @@ async def dashboard(
     request: Request,
     platform: Optional[str] = Query(None),
     min_score: float = Query(0.0, ge=0.0, le=100.0),
+    max_score: float = Query(100.0, ge=0.0, le=100.0),
     sort_by: str = Query("quality_score"),
     genre: Optional[str] = Query(None),
+    tag: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    developer: Optional[str] = Query(None),
+    revenue: Optional[str] = Query(None),
+    min_price: Optional[float] = Query(None),
+    max_price: Optional[float] = Query(None),
 ) -> HTMLResponse:
-    """Main dashboard — game cards grid with filtering."""
+    """Main dashboard — game cards grid with advanced filtering."""
     games = da.get_games_list(
         platform=platform,
         min_score=min_score,
+        max_score=max_score,
         sort_by=sort_by,
         genre=genre,
+        tag=tag,
         search=search,
+        developer=developer,
+        revenue_filter=revenue,
+        min_price=min_price,
+        max_price=max_price,
     )
-    # BUG 4 FIX: stats strip always shows totals, not filtered counts.
     stats = da.get_dashboard_stats(min_score=0.0)
     genres = da.get_available_genres()
+    tags = da.get_available_tags()
 
     # Detect HTMX partial request (only re-render the cards grid).
     if request.headers.get("HX-Request"):
@@ -165,13 +177,46 @@ async def dashboard(
         "games": games,
         "stats": stats,
         "genres": genres,
+        "tags": tags,
         "current_platform": platform or "",
         "current_min_score": min_score,
+        "current_max_score": max_score,
         "current_sort": sort_by,
         "current_genre": genre or "",
+        "current_tag": tag or "",
         "current_search": search or "",
+        "current_developer": developer or "",
+        "current_revenue": revenue or "",
+        "current_min_price": min_price if min_price is not None else "",
+        "current_max_price": max_price if max_price is not None else "",
     }
     return templates.TemplateResponse(request, "dashboard.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# Scan Now (trigger collector from web)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/scan", tags=["pages"])
+async def scan_now(request: Request) -> JSONResponse:
+    """Trigger a one-shot collection run (same as GUI 'Raccogli ora').
+
+    Runs in a background thread so the web request returns immediately.
+    The collector writes to the shared SQLite DB.
+    """
+    import threading
+
+    def _run_collector():
+        try:
+            from collector.run_once import run_once
+            run_once(include_social=True)
+        except Exception:
+            log.exception("Scan Now: collector failed")
+
+    thread = threading.Thread(target=_run_collector, daemon=True)
+    thread.start()
+    return JSONResponse({"status": "started", "message": "Collection started in background"})
 
 
 @app.get("/game/{game_id}", response_class=HTMLResponse, tags=["pages"])
