@@ -10,6 +10,8 @@
 - [x] apply patch 575481e1-b006-4cde-a706-8931876ceda7.patch to main & push (100%)
 - [x] apply patch v2-ULTIMATE-v2.patch to main & push (100%)
 - [x] fix AttributeError in web/data_access.py get_available_tags (100%)
+- [/] update web filters htmx onchange trigger & live reactive search [0%]
+
 
 
 

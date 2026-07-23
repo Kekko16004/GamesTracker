@@ -1,14 +1,41 @@
-<!-- HTMX partial: refreshed games grid -->
-<div id="games-grid" class="games-grid">
-{% if games %}
-  {% for game in games %}
-    {% include "partials/game_card.html" %}
-  {% endfor %}
-{% else %}
-<div class="empty-state">
-  <div class="empty-state__icon">&#x1F50D;</div>
-  <h3 class="empty-state__title">No games match your filters</h3>
-  <p class="empty-state__sub">Try loosening the quality score threshold or clearing the search.</p>
+<!-- HTMX partial: refreshed games grid & count container -->
+<div id="games-container">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+    <p class="results-count" style="margin:0;">
+      Showing <span class="mono" style="color:var(--text-accent); font-weight:600;">{{ games | length }}</span> game{% if games | length != 1 %}s{% endif %}
+    </p>
+
+    {% if current_search or current_developer or current_platform or current_genre or current_tag or current_revenue or current_min_price or current_max_price or current_min_score > 0 or current_max_score < 100 %}
+    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+      <span class="muted" style="font-size:0.8rem;">Active filters:</span>
+      {% if current_search %}<span class="badge badge--lang">Search: "{{ current_search }}"</span>{% endif %}
+      {% if current_platform %}<span class="badge badge--price">{{ current_platform | platform_label }}</span>{% endif %}
+      {% if current_genre %}<span class="tag tag--genre">{{ current_genre }}</span>{% endif %}
+      {% if current_tag %}<span class="tag tag--genre">🏷️ {{ current_tag }}</span>{% endif %}
+      {% if current_developer %}<span class="badge badge--lang">Dev: {{ current_developer }}</span>{% endif %}
+      {% if current_revenue %}<span class="badge badge--free">{{ current_revenue }}</span>{% endif %}
+      {% if current_min_score > 0 or current_max_score < 100 %}<span class="badge badge--lang">Score: {{ current_min_score }}–{{ current_max_score }}</span>{% endif %}
+      <a href="/" class="btn btn--sm btn--ghost" style="color:var(--text-accent); padding:2px 8px; font-size:0.8rem;" title="Clear all filters">
+        ✕ Clear filters
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div id="games-grid" class="games-grid">
+  {% if games %}
+    {% for game in games %}
+      {% include "partials/game_card.html" %}
+    {% endfor %}
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state__icon">🔍</div>
+    <h3 class="empty-state__title">No games found</h3>
+
+    <p class="empty-state__sub">Try loosening the score threshold or clearing your search filter.</p>
+    <a href="/" class="btn btn--sm btn--primary" style="margin-top:12px;">Reset Filters</a>
+  </div>
+  {% endif %}
+  </div>
 </div>
-{% endif %}
-</div>
+

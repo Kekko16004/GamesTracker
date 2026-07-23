@@ -8,7 +8,8 @@
     <h1 class="page-header__h1">Genre Trends</h1>
     <p class="page-header__sub">Comparing {{ data.genre_trends | length }} genres across {{ data.stats.visible_games }} tracked games</p>
   </div>
-  <form class="page-header__controls" hx-get="/trends" hx-target="body" hx-push-url="true">
+  <form class="page-header__controls" hx-get="/trends" hx-target="body" hx-push-url="true" hx-trigger="change, input delay:300ms">
+
     <div class="filter-bar__group" x-data="{ score: {{ current_min_score }} }">
       <label class="filter-bar__label" for="min_score">
         Min score <span class="mono" x-text="score"></span>

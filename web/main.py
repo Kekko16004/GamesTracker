@@ -167,11 +167,6 @@ async def dashboard(
     genres = da.get_available_genres()
     tags = da.get_available_tags()
 
-    # Detect HTMX partial request (only re-render the cards grid).
-    if request.headers.get("HX-Request"):
-        ctx = {**_base_context(request), "games": games}
-        return templates.TemplateResponse(request, "partials/game_list.html", ctx)
-
     ctx = {
         **_base_context(request),
         "games": games,
@@ -190,7 +185,13 @@ async def dashboard(
         "current_min_price": min_price if min_price is not None else "",
         "current_max_price": max_price if max_price is not None else "",
     }
+
+    # Detect HTMX partial request (only re-render the cards grid container).
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, "partials/game_list.html", ctx)
+
     return templates.TemplateResponse(request, "dashboard.html", ctx)
+
 
 
 # ---------------------------------------------------------------------------
