@@ -35,17 +35,18 @@
       {% if rep.developer %}
       <span class="muted" style="font-size: 0.8rem;">by {{ rep.developer }}</span>
       {% endif %}
-      {% if rep.quality_score is not none %}
-      <span class="badge {% if rep.quality_score >= 70 %}badge--free{% elif rep.quality_score >= 40 %}badge--price{% else %}badge--lang{% endif %}" style="margin-left: auto;">
-        {{ "%.0f" | format(rep.quality_score) }}
+      {% if rep.get('quality_score') is not none and rep.get('quality_score') != '' %}
+      <span class="badge {% if rep.get('quality_score') >= 70 %}badge--free{% elif rep.get('quality_score') >= 40 %}badge--price{% else %}badge--lang{% endif %}" style="margin-left: auto;">
+        {{ "%.0f" | format(rep.get('quality_score')) }}
       </span>
       {% endif %}
       <span class="report-card__date mono">{{ rep.generated_at[:10] if rep.generated_at else '&mdash;' }}</span>
     </div>
 
-    {% if rep.release_date %}
-    <div style="font-size: 0.78rem; color: var(--text-muted);">Released {{ rep.release_date }}</div>
+    {% if rep.get('release_date') %}
+    <div style="font-size: 0.78rem; color: var(--text-muted);">Released {{ rep.get('release_date') }}</div>
     {% endif %}
+
 
     <!-- Summary preview -->
     <p class="report-card__preview">{{ rep.summary_preview }}</p>

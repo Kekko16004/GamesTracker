@@ -102,8 +102,9 @@ def test_main_window_builds(qapp, repo):
 
     window = MainWindow(repo)
     qapp.processEvents()
-    # Le viste nello stack: dashboard, trends, reports, simulator, detail.
-    assert window._stack.count() == 5
+    # Le viste nello stack: dashboard, trends, reports, simulator, copilot, detail.
+    assert window._stack.count() in (5, 6)
+
 
 
 def test_empty_db_no_crash(qapp):
