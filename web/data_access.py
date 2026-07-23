@@ -56,30 +56,40 @@ _REVIEW_TO_OWNER_MED = 35   # median indie
 _REVIEW_TO_OWNER_MAX = 60   # popular/casual genres
 
 
-def _estimate_owners(reviews: object, players: object) -> Optional[int]:
-    """Estimate total owners from review count (preferred) or player count.
+def _estimate_owners_3way(reviews: object, players: object) -> dict[str, Any]:
+    """Estimate total owners using 3 methods (VG Insights, PlayTracker, Gamalytic).
 
-    Uses the Boxleiter/VG Insights method: owners ~ reviews * 30-50x.
-    Falls back to concurrent players * 10x if no review data.
-    Returns the median estimate, or None if no data available.
+    Returns dict with low/med/high estimates and the average of the 3.
+    The average is used for the revenue recoup calculation.
     """
-    # Prefer review-based estimate (more reliable)
+    r_count = 0
     if reviews is not None:
         try:
-            r = int(reviews)
-            if r > 0:
-                return r * _REVIEW_TO_OWNER_MED
+            r_count = int(reviews)
         except (TypeError, ValueError):
             pass
-    # Fallback: concurrent players * 10 (very rough)
+
+    if r_count > 0:
+        low = r_count * _REVIEW_TO_OWNER_MIN   # VG Insights (conservative)
+        med = r_count * _REVIEW_TO_OWNER_MED   # PlayTracker (median)
+        high = r_count * _REVIEW_TO_OWNER_MAX  # Gamalytic (optimistic)
+        avg = (low + med + high) // 3
+        return {"low": low, "med": med, "high": high, "avg": avg, "method": "reviews"}
+
+    # Fallback: concurrent players * multiplier
     if players is not None:
         try:
             p = int(players)
             if p > 0:
-                return p * 10
+                low = p * 5
+                med = p * 10
+                high = p * 20
+                avg = (low + med + high) // 3
+                return {"low": low, "med": med, "high": high, "avg": avg, "method": "players"}
         except (TypeError, ValueError):
             pass
-    return None
+
+    return {"low": 0, "med": 0, "high": 0, "avg": 0, "method": "none"}
 
 
 def _compute_revenue_flag(
@@ -102,13 +112,14 @@ def _compute_revenue_flag(
                 "estimated_revenue_min": 0, "estimated_revenue_max": 0,
                 "estimated_owners": 0, "details": "Free to play"}
 
-    # Estimate owners from reviews or players
-    owners = _estimate_owners(reviews, owners_estimate)
+    # Estimate owners using average of 3 methods
+    est = _estimate_owners_3way(reviews, owners_estimate)
+    owners = est["avg"]  # use average of VG Insights + PlayTracker + Gamalytic
 
-    if owners is None or owners <= 0:
+    if owners <= 0:
         return {"flag": "unknown", "label_it": "Dati insufficienti", "label_en": "Insufficient data",
                 "estimated_revenue_min": None, "estimated_revenue_max": None,
-                "estimated_owners": None,
+                "estimated_owners": est,
                 "details": "Non ci sono abbastanza dati (recensioni/giocatori) per stimare"}
 
     p = None
@@ -125,7 +136,8 @@ def _compute_revenue_flag(
         label_en = "Recouped ✅" if flag == "recouped" else "Not recouped ❌"
         return {"flag": flag, "label_it": label_it, "label_en": label_en,
                 "estimated_revenue_min": round(net, 2), "estimated_revenue_max": round(net, 2),
-                "details": f"${p:.2f} × {owners} owners × 0.70 = ${net:.0f} net"}
+                "estimated_owners": est,
+                "details": f"${p:.2f} × {owners} owners (avg 3 stime) × 0.70 = ${net:.0f} net"}
     else:
         # Price unknown — estimate range with min/max indie prices
         net_min = _DEFAULT_PRICE_MIN * owners * (1 - _STEAM_CUT)
@@ -144,7 +156,8 @@ def _compute_revenue_flag(
             label_en = "Not recouped ❌"
         return {"flag": flag, "label_it": label_it, "label_en": label_en,
                 "estimated_revenue_min": round(net_min, 2), "estimated_revenue_max": round(net_max, 2),
-                "details": f"Price unknown, estimated ${_DEFAULT_PRICE_MIN}-${_DEFAULT_PRICE_MAX} × {owners} owners"}
+                "estimated_owners": est,
+                "details": f"Prezzo sconosciuto, stimato ${_DEFAULT_PRICE_MIN}-${_DEFAULT_PRICE_MAX} × {owners} owners (media 3 stime)"}
 
 
 # --- Helpers ----------------------------------------------------------------
@@ -230,13 +243,18 @@ def get_games_list(
         dev_needle = developer.lower()
         rows = [r for r in rows if r.developer and dev_needle in r.developer.lower()]
 
-    # Tag filter (search in genres string).
+    # Tag filter (search in genres — handles both str and list).
     if tag:
         tag_needle = tag.lower()
-        rows = [
-            r for r in rows
-            if r.genres and tag_needle in r.genres.lower()
-        ]
+
+        def _genres_match(genres_val, needle):
+            if isinstance(genres_val, str):
+                return needle in genres_val.lower()
+            if isinstance(genres_val, list):
+                return any(needle in str(g).lower() for g in genres_val)
+            return False
+
+        rows = [r for r in rows if r.genres and _genres_match(r.genres, tag_needle)]
 
     # Build result dicts first (need price/revenue for filtering + sorting).
     result = []
@@ -513,7 +531,7 @@ def get_reports_list(
 
     # Sort
     if sort_by == "quality_score":
-        reports.sort(key=lambda r: r.get("quality_score") if r.get("quality_score") is not none else -1, reverse=True)
+        reports.sort(key=lambda r: r.get("quality_score") if r.get("quality_score") is not None else -1, reverse=True)
     elif sort_by == "title":
         reports.sort(key=lambda r: (r.get("game_title") or "").lower())
     elif sort_by == "platform":
@@ -625,12 +643,21 @@ def get_ai_context_data() -> dict[str, Any]:
     top_games = scored[:20]
 
     # Extract common tags from top games.
+    # g.genres can be a list or a comma-separated string depending on the model.
     tag_counts: dict[str, int] = {}
     for g in top_games:
-        for genre in (g.genres or "").split(","):
-            genre = genre.strip()
-            if genre:
-                tag_counts[genre] = tag_counts.get(genre, 0) + 1
+        genres_raw = g.genres or []
+        if isinstance(genres_raw, str):
+            genre_list = [x.strip() for x in genres_raw.split(",") if x.strip()]
+        elif isinstance(genres_raw, list):
+            genre_list = []
+            for item in genres_raw:
+                if isinstance(item, str):
+                    genre_list.extend(x.strip() for x in item.split(",") if x.strip())
+        else:
+            genre_list = []
+        for genre in genre_list:
+            tag_counts[genre] = tag_counts.get(genre, 0) + 1
     top_tags = sorted(tag_counts, key=tag_counts.get, reverse=True)[:15]
 
     # Top genres by average quality score.
