@@ -779,14 +779,44 @@ class AiCopilotView(QWidget):
         self._status_label.setVisible(True)
 
         def _do_generate() -> dict[str, Any]:
-            # Try real AI backend; fall back to mock gracefully.
+            # Try real AI backend via core.ai; fall back to mock gracefully if not configured.
             try:
-                from ai.backend import generate_all  # type: ignore[import]
-                return generate_all(inputs)
-            except (ImportError, Exception):
+                from core.ai.llm_client import load_llm_config, LLMClient
+                from core.ai.game_copilot import GameBrief, GameCopilot
+                import asyncio
+
+                config = load_llm_config()
+                if not config.api_key:
+                    return _mock_generate(inputs)
+
+                brief = GameBrief(
+                    game_description=inputs.get("description", ""),
+                    genre=inputs.get("genre") or None,
+                    art_style=inputs.get("art_style") or None,
+                    target_audience=inputs.get("target_audience") or None,
+                    similar_games=[s.strip() for s in inputs.get("similar_games", "").split(",") if s.strip()],
+                )
+
+                client = LLMClient(config)
+                try:
+                    copilot = GameCopilot(client=client)
+                    res = asyncio.run(copilot.generate_all(brief))
+                    return {
+                        "short_desc": getattr(res, "steam_description_short", ""),
+                        "long_desc": getattr(res, "steam_description_long", ""),
+                        "titles": getattr(res, "titles", []),
+                        "image_prompts": getattr(res, "image_prompts", {}),
+                        "tags": getattr(res, "tags", []),
+                        "elevator_pitch": getattr(res, "elevator_pitch", ""),
+                        "marketing_hooks": getattr(res, "marketing_hooks", []),
+                    }
+                finally:
+                    asyncio.run(client.close())
+            except Exception:
                 import time
-                time.sleep(0.6)  # simulate latency for realism
+                time.sleep(0.4)
                 return _mock_generate(inputs)
+
 
         run_query(_do_generate, self._on_results_ready, self._on_generate_error)
 

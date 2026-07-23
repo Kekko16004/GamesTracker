@@ -158,6 +158,9 @@
 
   function makeColor(idx) { return palette[idx % palette.length]; }
 
+  const chartHeight = Math.max(360, labels.length * 32) + 'px';
+  document.querySelectorAll('.chart-wrap--tall').forEach(el => el.style.height = chartHeight);
+
   // ---- Game count ----
   new Chart(document.getElementById('genreCountChart'), {
     type: 'bar',
@@ -179,7 +182,7 @@
       plugins: { legend: { display: false } },
       scales: {
         x: { grid: { color: '#242836' }, beginAtZero: true },
-        y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 }, autoSkip: false } },
       },
     },
   });
@@ -205,10 +208,11 @@
       plugins: { legend: { display: false } },
       scales: {
         x: { grid: { color: '#242836' }, beginAtZero: true, max: 100 },
-        y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 }, autoSkip: false } },
       },
     },
   });
+
 
   // ---- Review growth ----
   new Chart(document.getElementById('genreGrowthChart'), {

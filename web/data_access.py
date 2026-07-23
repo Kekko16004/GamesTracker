@@ -456,8 +456,14 @@ def get_trend_data(*, min_score: float = 0.0) -> dict[str, Any]:
     }
 
 
-def get_reports_list() -> list[dict[str, Any]]:
-    """Return all analysis reports (newest first).
+def get_reports_list(
+    *,
+    search: Optional[str] = None,
+    lang: Optional[str] = None,
+    platform: Optional[str] = None,
+    sort_by: str = "newest",
+) -> list[dict[str, Any]]:
+    """Return all analysis reports with optional filtering and sorting.
 
     BUG 2 FIX: Includes quality_score, release_date, developer, platform,
     and social_post_count populated from the linked Game record.
@@ -475,7 +481,7 @@ def get_reports_list() -> list[dict[str, Any]]:
         if detail is not None:
             game_info[gid] = detail
 
-    return [
+    reports = [
         {
             "id": r.id,
             "game_id": r.game_id,
@@ -484,7 +490,6 @@ def get_reports_list() -> list[dict[str, Any]]:
             "lang": r.lang,
             "generated_at": _fmt_dt(r.generated_at),
             "summary_preview": r.summary_preview,
-            # BUG 2 FIX: fields from the Game model
             "quality_score": r.quality_score,
             "release_date": r.release_date,
             "developer": game_info.get(r.game_id, {}).get("developer") if r.game_id else None,
@@ -493,6 +498,31 @@ def get_reports_list() -> list[dict[str, Any]]:
         }
         for r in rows
     ]
+
+    # Filter
+    if search:
+        s = search.lower()
+        reports = [
+            r for r in reports
+            if s in (r.get("game_title") or "").lower() or s in (r.get("summary_preview") or "").lower()
+        ]
+    if lang:
+        reports = [r for r in reports if (r.get("lang") or "").lower() == lang.lower()]
+    if platform:
+        reports = [r for r in reports if (r.get("platform") or "").lower() == platform.lower()]
+
+    # Sort
+    if sort_by == "quality_score":
+        reports.sort(key=lambda r: r.get("quality_score") if r.get("quality_score") is not none else -1, reverse=True)
+    elif sort_by == "title":
+        reports.sort(key=lambda r: (r.get("game_title") or "").lower())
+    elif sort_by == "platform":
+        reports.sort(key=lambda r: (r.get("platform") or "").lower())
+    else:  # newest
+        reports.sort(key=lambda r: r.get("generated_at") or "", reverse=True)
+
+    return reports
+
 
 
 def get_report_detail(report_id: int) -> Optional[dict[str, Any]]:

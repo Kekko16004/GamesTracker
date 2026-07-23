@@ -239,11 +239,25 @@ async def trends(request: Request, min_score: float = Query(0.0, ge=0.0, le=100.
 
 
 @app.get("/reports", response_class=HTMLResponse, tags=["pages"])
-async def reports(request: Request) -> HTMLResponse:
-    """Report viewer."""
-    report_list = da.get_reports_list()
-    ctx = {**_base_context(request), "reports": report_list}
+async def reports(
+    request: Request,
+    search: Optional[str] = Query(None),
+    lang: Optional[str] = Query(None),
+    platform: Optional[str] = Query(None),
+    sort_by: str = Query("newest"),
+) -> HTMLResponse:
+    """Report viewer with filtering and sorting."""
+    report_list = da.get_reports_list(search=search, lang=lang, platform=platform, sort_by=sort_by)
+    ctx = {
+        **_base_context(request),
+        "reports": report_list,
+        "current_search": search or "",
+        "current_lang": lang or "",
+        "current_platform": platform or "",
+        "current_sort": sort_by or "newest",
+    }
     return templates.TemplateResponse(request, "reports.html", ctx)
+
 
 
 @app.get("/reports/{report_id}", response_class=HTMLResponse, tags=["pages"])
@@ -328,7 +342,7 @@ async def ai_generate(request: Request) -> JSONResponse:
             genre=body.get("genre") or None,
             art_style=body.get("art_style") or None,
             target_audience=body.get("target_audience") or None,
-            similar_games=(body.get("similar_games") or "").split(",") if body.get("similar_games") else None,
+            similar_games=[s.strip() for s in body["similar_games"].split(",") if s.strip()] if body.get("similar_games") else [],
             character_description=body.get("character_description") or None,
             estimated_playtime_hours=playtime,
         )
@@ -356,8 +370,80 @@ async def ai_generate(request: Request) -> JSONResponse:
             "error": "Modulo AI non disponibile. Verifica che core/ai/ esista."
         }, status_code=500)
     except Exception as exc:
-        log.exception("AI generation failed")
+        logger.exception("AI generation failed: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+
+
+@app.get("/api/ai/config", tags=["api"])
+async def get_ai_config() -> JSONResponse:
+    """Return current AI configuration."""
+    from core.ai.llm_client import load_llm_config
+    cfg = load_llm_config()
+    return JSONResponse({
+        "provider": cfg.provider,
+        "api_key": cfg.api_key,
+        "base_url": cfg.base_url,
+        "model": cfg.model,
+        "temperature": cfg.temperature,
+        "max_tokens": cfg.max_tokens,
+        "is_configured": bool(cfg.api_key),
+    })
+
+
+@app.post("/api/ai/config", tags=["api"])
+async def save_ai_config(request: Request) -> JSONResponse:
+    """Save AI configuration to environment and config/.env file."""
+    body = await request.json()
+    provider = str(body.get("provider") or "openrouter").strip()
+    api_key = str(body.get("api_key") or "").strip()
+    base_url = str(body.get("base_url") or "").strip()
+    model = str(body.get("model") or "anthropic/claude-sonnet-4").strip()
+
+    os.environ["AI_PROVIDER"] = provider
+    os.environ["AI_API_KEY"] = api_key
+    os.environ["AI_BASE_URL"] = base_url
+    os.environ["AI_MODEL"] = model
+
+    # Persist to config/.env
+    env_path = os.path.join(PROJECT_ROOT, "config", ".env")
+    try:
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, encoding="utf-8") as f:
+                lines = f.readlines()
+
+        env_map = {
+            "AI_PROVIDER": provider,
+            "AI_API_KEY": api_key,
+            "AI_BASE_URL": base_url,
+            "AI_MODEL": model,
+        }
+        new_lines = []
+        updated_keys: set[str] = set()
+        for line in lines:
+            stripped = line.strip()
+            if "=" in stripped and not stripped.startswith("#"):
+                k, _, _ = stripped.partition("=")
+                k = k.strip()
+                if k in env_map:
+                    new_lines.append(f"{k}={env_map[k]}\n")
+                    updated_keys.add(k)
+                    continue
+            new_lines.append(line)
+
+        for k, v in env_map.items():
+            if k not in updated_keys:
+                new_lines.append(f"{k}={v}\n")
+
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+    except Exception as exc:
+        logger.warning("Could not persist config/.env: %s", exc)
+
+    return JSONResponse({"status": "ok", "message": "Configurazione AI salvata con successo!"})
+
 
 
 # ---------------------------------------------------------------------------

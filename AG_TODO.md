@@ -11,6 +11,11 @@
 - [x] apply patch v2-ULTIMATE-v2.patch to main & push (100%)
 - [x] fix AttributeError in web/data_access.py get_available_tags (100%)
 - [x] update web filters htmx onchange trigger & live reactive search (100%)
+- [x] fix Chart.js y-axis ticks autoSkip false in trends.html (100%)
+- [x] add filters and sort to reports page (web & data_access) (100%)
+- [x] fix AI copilot errors & add settings UI in GUI/web (100%)
+
+
 
 
 

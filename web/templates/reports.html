@@ -10,6 +10,56 @@
   </div>
 </div>
 
+<!-- ======== FILTERS & SORT ======== -->
+<form class="filter-bar" hx-get="/reports" hx-target="body" hx-push-url="true" hx-trigger="change, search, input delay:300ms" style="margin-bottom:20px;">
+  <div class="filter-bar__row">
+    <!-- Search -->
+    <div class="filter-bar__group filter-bar__group--wide">
+      <label class="filter-bar__label" for="search">🔍 Search Reports</label>
+      <input id="search" name="search" type="search" class="filter-bar__input"
+        placeholder="Game title or summary..." value="{{ current_search }}" />
+    </div>
+
+    <!-- Language -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="lang">Language</label>
+      <select id="lang" name="lang" class="filter-bar__select">
+        <option value="">All languages</option>
+        <option value="it" {% if current_lang == 'it' %}selected{% endif %}>🇮🇹 Italian</option>
+        <option value="en" {% if current_lang == 'en' %}selected{% endif %}>🇬🇧 English</option>
+      </select>
+    </div>
+
+    <!-- Platform -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="platform">Platform</label>
+      <select id="platform" name="platform" class="filter-bar__select">
+        <option value="">All platforms</option>
+        <option value="steam" {% if current_platform == 'steam' %}selected{% endif %}>Steam</option>
+        <option value="itch" {% if current_platform == 'itch' %}selected{% endif %}>itch.io</option>
+      </select>
+    </div>
+
+    <!-- Sort -->
+    <div class="filter-bar__group">
+      <label class="filter-bar__label" for="sort_by">Sort by</label>
+      <select id="sort_by" name="sort_by" class="filter-bar__select">
+        <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest First ↓</option>
+        <option value="quality_score" {% if current_sort == 'quality_score' %}selected{% endif %}>Quality Score ↓</option>
+        <option value="title" {% if current_sort == 'title' %}selected{% endif %}>Title A–Z</option>
+        <option value="platform" {% if current_sort == 'platform' %}selected{% endif %}>Platform</option>
+      </select>
+    </div>
+
+    {% if current_search or current_lang or current_platform or current_sort != 'newest' %}
+    <div class="filter-bar__group" style="align-self:flex-end;">
+      <a href="/reports" class="btn btn--sm btn--ghost" style="color:var(--text-accent);">✕ Clear</a>
+    </div>
+    {% endif %}
+  </div>
+</form>
+
+
 {% if reports %}
 <div class="reports-grid">
   {% for rep in reports %}
