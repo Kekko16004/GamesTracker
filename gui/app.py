@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 
 from gui.data_access import GameRepository
 from gui.i18n import available_languages, tr, translator
+from gui.views.ai_copilot import AiCopilotView
 from gui.views.dashboard import DashboardView
 from gui.views.game_detail import GameDetailView
 from gui.views.reports import ReportsView
@@ -45,9 +46,10 @@ class MainWindow(QMainWindow):
         self._reports = ReportsView(self._repo)
         self._simulator = SimulatorView()
         self._detail = GameDetailView(self._repo)
+        self._ai_copilot = AiCopilotView()
 
         for view in (self._dashboard, self._trends, self._reports,
-                     self._simulator, self._detail):
+                     self._simulator, self._detail, self._ai_copilot):
             self._stack.addWidget(view)
 
         # Navigazione tra le viste.
@@ -75,6 +77,7 @@ class MainWindow(QMainWindow):
         self._act_trends = QAction(self)
         self._act_reports = QAction(self)
         self._act_simulator = QAction(self)
+        self._act_ai_copilot = QAction(self)
         self._act_dashboard.triggered.connect(
             lambda: self._stack.setCurrentWidget(self._dashboard)
         )
@@ -87,8 +90,11 @@ class MainWindow(QMainWindow):
         self._act_simulator.triggered.connect(
             lambda: self._stack.setCurrentWidget(self._simulator)
         )
+        self._act_ai_copilot.triggered.connect(
+            lambda: self._stack.setCurrentWidget(self._ai_copilot)
+        )
         for act in (self._act_dashboard, self._act_trends, self._act_reports,
-                    self._act_simulator):
+                    self._act_simulator, self._act_ai_copilot):
             self._toolbar.addAction(act)
 
     def _build_menu(self) -> None:
@@ -99,6 +105,8 @@ class MainWindow(QMainWindow):
         self._view_menu.addAction(self._act_trends)
         self._view_menu.addAction(self._act_reports)
         self._view_menu.addAction(self._act_simulator)
+        self._view_menu.addSeparator()
+        self._view_menu.addAction(self._act_ai_copilot)
 
         # Menu Tema con gruppo esclusivo.
         from gui.theme import DARK_THEME, LIGHT_THEME
@@ -155,6 +163,7 @@ class MainWindow(QMainWindow):
         self._act_trends.setText(tr("nav.trends"))
         self._act_reports.setText(tr("nav.reports"))
         self._act_simulator.setText(tr("nav.simulator"))
+        self._act_ai_copilot.setText(tr("nav.ai_copilot"))
         self._view_menu.setTitle(tr("app.menu.view"))
         self._theme_menu.setTitle(tr("app.menu.theme"))
         self._lang_menu.setTitle(tr("app.menu.language"))

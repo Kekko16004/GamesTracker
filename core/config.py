@@ -119,6 +119,14 @@ class Settings:
     twitch_client_id: str = ""
     twitch_client_secret: str = ""
 
+    # --- AI Copilot ---
+    ai_provider: str = "openrouter"     # openai | openrouter | anthropic | custom
+    ai_api_key: str = ""
+    ai_base_url: str = ""               # auto-resolved for known providers
+    ai_model: str = "anthropic/claude-sonnet-4"
+    ai_max_tokens: int = 4096
+    ai_temperature: float = 0.7
+
     # Percorsi utili esposti come campi (non da .env)
     project_root: Path = field(default=PROJECT_ROOT)
     data_dir: Path = field(default=DATA_DIR)
@@ -205,6 +213,13 @@ def load_settings(env_file: Path | str | None = None) -> Settings:
         rawg_api_key=os.getenv("RAWG_API_KEY", ""),
         twitch_client_id=os.getenv("TWITCH_CLIENT_ID", ""),
         twitch_client_secret=os.getenv("TWITCH_CLIENT_SECRET", ""),
+        # AI Copilot
+        ai_provider=_get_str("AI_PROVIDER", "openrouter"),
+        ai_api_key=os.getenv("AI_API_KEY", ""),
+        ai_base_url=os.getenv("AI_BASE_URL", ""),
+        ai_model=_get_str("AI_MODEL", "anthropic/claude-sonnet-4"),
+        ai_max_tokens=_get_int("AI_MAX_TOKENS", 4096),
+        ai_temperature=_get_float("AI_TEMPERATURE", 0.7),
     )
 
 

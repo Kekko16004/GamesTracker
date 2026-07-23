@@ -17,6 +17,10 @@ APScheduler==3.10.4
 # --- HTTP ---
 httpx==0.27.2
 
+# --- AI (OpenAI-compatible client) ---
+# httpx is already listed above and is the only dependency needed.
+# No additional packages required — we use raw HTTP to the OpenAI API format.
+
 # --- Analisi dati ---
 pandas==2.2.3
 

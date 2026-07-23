@@ -636,4 +636,119 @@ STRINGS: dict[str, dict[str, str]] = {
         "it": "Includi social (TikTok, IG, X, YouTube, Reddit)",
         "en": "Include social (TikTok, IG, X, YouTube, Reddit)",
     },
+
+    # --- AI Copilot: navigazione ---
+    "nav.ai_copilot": {"it": "🤖 AI Copilot", "en": "🤖 AI Copilot"},
+
+    # --- AI Copilot: form ---
+    "ai.title": {"it": "🤖 AI Copilot", "en": "🤖 AI Copilot"},
+    "ai.description_label": {
+        "it": "Descrizione del gioco",
+        "en": "Game description",
+    },
+    "ai.description_placeholder": {
+        "it": "Descrivi il tuo gioco: meccaniche, stile, ambientazione...",
+        "en": "Describe your game: mechanics, style, setting...",
+    },
+    "ai.genre": {"it": "Genere", "en": "Genre"},
+    "ai.art_style": {"it": "Stile grafico", "en": "Art style"},
+    "ai.target_audience": {"it": "Pubblico target", "en": "Target audience"},
+    "ai.target_audience_placeholder": {
+        "it": "es. Fans di Hollow Knight, giocatori casual...",
+        "en": "e.g. Hollow Knight fans, casual gamers...",
+    },
+    "ai.similar_games": {"it": "Giochi simili", "en": "Similar games"},
+    "ai.similar_games_placeholder": {
+        "it": "es. Celeste, Dead Cells, Hades",
+        "en": "e.g. Celeste, Dead Cells, Hades",
+    },
+    "ai.generate_button": {"it": "🚀 Genera tutto", "en": "🚀 Generate all"},
+    "ai.settings_button": {"it": "⚙️ Configura AI", "en": "⚙️ Configure AI"},
+    "ai.generating": {"it": "Generazione in corso...", "en": "Generating..."},
+
+    # --- AI Copilot: tab labels ---
+    "ai.tab.description": {"it": "📝 Descrizione", "en": "📝 Description"},
+    "ai.tab.titles": {"it": "🎯 Titoli", "en": "🎯 Titles"},
+    "ai.tab.images": {"it": "🎨 Prompt Immagini", "en": "🎨 Image Prompts"},
+    "ai.tab.tags": {"it": "🏷️ Tag", "en": "🏷️ Tags"},
+    "ai.tab.marketing": {"it": "📢 Marketing", "en": "📢 Marketing"},
+    "ai.tab.reason": {"it": "Motivazione", "en": "Reason"},
+
+    # --- AI Copilot: actions ---
+    "ai.copy_all": {"it": "📋 Copia tutto", "en": "📋 Copy all"},
+    "ai.copied": {"it": "✅ Copiato!", "en": "✅ Copied!"},
+
+    # --- AI Copilot: content labels ---
+    "ai.short_desc": {"it": "Descrizione breve", "en": "Short description"},
+    "ai.long_desc": {"it": "Descrizione lunga (Markdown)", "en": "Long description (Markdown)"},
+    "ai.no_results": {
+        "it": "Nessun risultato ancora. Compila il form e premi 🚀 Genera tutto.",
+        "en": "No results yet. Fill in the form and press 🚀 Generate all.",
+    },
+    "ai.tags_hint": {
+        "it": "Clicca un tag per copiarlo negli appunti.",
+        "en": "Click a tag to copy it to the clipboard.",
+    },
+
+    # --- AI Copilot: image prompt sections ---
+    "ai.img.capsule": {
+        "it": "Capsule art (460x215)",
+        "en": "Capsule art (460x215)",
+    },
+    "ai.img.header": {
+        "it": "Header image (460x215)",
+        "en": "Header image (460x215)",
+    },
+    "ai.img.hero": {
+        "it": "Library hero (1920x620)",
+        "en": "Library hero (1920x620)",
+    },
+    "ai.img.screenshots": {
+        "it": "Screenshot prompt (1920x1080)",
+        "en": "Screenshot prompts (1920x1080)",
+    },
+
+    # --- AI Copilot: marketing ---
+    "ai.marketing.elevator_pitch": {
+        "it": "Elevator pitch",
+        "en": "Elevator pitch",
+    },
+    "ai.marketing.hooks": {
+        "it": "Hook di marketing",
+        "en": "Marketing hooks",
+    },
+
+    # --- AI Settings dialog ---
+    "ai.settings.title": {
+        "it": "⚙️ Configura AI Copilot",
+        "en": "⚙️ Configure AI Copilot",
+    },
+    "ai.settings.provider_group": {
+        "it": "Provider e autenticazione",
+        "en": "Provider & authentication",
+    },
+    "ai.settings.provider": {"it": "Provider", "en": "Provider"},
+    "ai.settings.api_key": {"it": "API Key", "en": "API Key"},
+    "ai.settings.base_url": {"it": "Base URL", "en": "Base URL"},
+    "ai.settings.model_group": {
+        "it": "Parametri del modello",
+        "en": "Model parameters",
+    },
+    "ai.settings.model": {"it": "Modello", "en": "Model"},
+    "ai.settings.temperature": {"it": "Temperatura", "en": "Temperature"},
+    "ai.settings.max_tokens": {"it": "Max token", "en": "Max tokens"},
+    "ai.settings.test": {
+        "it": "🔌 Testa connessione",
+        "en": "🔌 Test connection",
+    },
+    "ai.settings.test_success": {
+        "it": "✅ Connessione riuscita!",
+        "en": "✅ Connection successful!",
+    },
+    "ai.settings.test_fail": {
+        "it": "❌ Connessione fallita",
+        "en": "❌ Connection failed",
+    },
+    "ai.settings.save": {"it": "Salva", "en": "Save"},
+    "ai.settings.cancel": {"it": "Annulla", "en": "Cancel"},
 }
