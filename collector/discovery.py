@@ -54,8 +54,8 @@ _scheduler = None
 MAX_NEW_PER_CYCLE = 40
 
 # Finestra di freschezza: si tracciano solo giochi usciti entro questi giorni.
-# L'utente vuole analizzare solo uscite recenti (max ~2 settimane).
-MAX_RELEASE_AGE_DAYS = 14
+# 30 giorni = 1 mese di finestra per catturare le uscite recenti.
+MAX_RELEASE_AGE_DAYS = 30
 
 
 def _is_recent_release(
