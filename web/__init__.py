@@ -1,0 +1,1 @@
+# GamesTracker web dashboard package.
