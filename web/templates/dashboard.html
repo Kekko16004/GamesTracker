@@ -7,17 +7,17 @@
 <div class="page-header">
   <div class="page-header__titles">
     <h1 class="page-header__h1">Dashboard</h1>
-    <p class="page-header__sub">Tracking {{ stats.total_games }} games · {{ stats.visible_games }} visible · {{ stats.recent_releases }} released in last 30 days</p>
+    <p class="page-header__sub">Tracking {{ stats.total_games }} games across all platforms</p>
   </div>
 </div>
 
 <!-- ======== STATS STRIP ======== -->
-<div class="stats-strip">
-  <div class="stat-card">
+<div class="stats-strip" x-data="{ shown: false }" x-init="setTimeout(() => shown = true, 100)" x-show="true">
+  <div class="stat-card stat-card--accent">
     <span class="stat-card__value mono">{{ stats.total_games }}</span>
     <span class="stat-card__label">Total Games</span>
   </div>
-  <div class="stat-card">
+  <div class="stat-card stat-card--green">
     <span class="stat-card__value mono">{{ stats.visible_games }}</span>
     <span class="stat-card__label">Visible</span>
   </div>
@@ -25,7 +25,7 @@
     <span class="stat-card__value mono">{{ stats.discarded_games }}</span>
     <span class="stat-card__label">Discarded</span>
   </div>
-  <div class="stat-card">
+  <div class="stat-card stat-card--amber">
     <span class="stat-card__value mono">{{ stats.recent_releases }}</span>
     <span class="stat-card__label">Recent (30d)</span>
   </div>
@@ -48,7 +48,7 @@
       name="search"
       type="search"
       class="filter-bar__input"
-      placeholder="Game title…"
+      placeholder="Search game titles..."
       value="{{ current_search }}"
     />
   </div>
@@ -74,10 +74,10 @@
     </select>
   </div>
 
-  <!-- Min score -->
+  <!-- Min score slider -->
   <div class="filter-bar__group" x-data="{ score: {{ current_min_score }} }">
     <label class="filter-bar__label" for="min_score">
-      Min score <span class="mono" x-text="score"></span>
+      Quality Score &ge; <span class="mono" x-text="score"></span>
     </label>
     <input
       id="min_score"
@@ -88,16 +88,19 @@
       x-model="score"
       value="{{ current_min_score }}"
     />
+    {% if current_min_score > 0 %}
+    <span class="filter-note">Including unscored games when score = 0</span>
+    {% endif %}
   </div>
 
   <!-- Sort -->
   <div class="filter-bar__group">
-    <label class="filter-bar__label" for="sort_by">Sort by</label>
+    <label class="filter-bar__label" for="sort_by">Sort</label>
     <select id="sort_by" name="sort_by" class="filter-bar__select">
       <option value="quality_score" {% if current_sort == 'quality_score' %}selected{% endif %}>Quality Score</option>
       <option value="growth"        {% if current_sort == 'growth'        %}selected{% endif %}>Growth</option>
       <option value="recency"       {% if current_sort == 'recency'       %}selected{% endif %}>Recent</option>
-      <option value="title"         {% if current_sort == 'title'         %}selected{% endif %}>Title A–Z</option>
+      <option value="title"         {% if current_sort == 'title'         %}selected{% endif %}>Title A-Z</option>
     </select>
   </div>
 </form>
@@ -115,7 +118,7 @@
     {% endfor %}
   {% else %}
   <div class="empty-state">
-    <div class="empty-state__icon">◈</div>
+    <div class="empty-state__icon">&#x1F3AE;</div>
     <h3 class="empty-state__title">No games found</h3>
     <p class="empty-state__sub">Try adjusting your filters or adding games through the desktop app.</p>
   </div>

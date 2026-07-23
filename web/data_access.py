@@ -41,6 +41,28 @@ def _fmt_dt(dt: Optional[datetime]) -> Optional[str]:
 # --- Public functions -----------------------------------------------------
 
 
+def _make_thumbnail(platform: str, external_id: Optional[str], header_image: Optional[str]) -> Optional[str]:
+    """Construct a thumbnail URL for a game.
+
+    For Steam games, use the CDN header image URL built from external_id.
+    Falls back to whatever header_image is stored in the DB.
+    """
+    if platform == "steam" and external_id:
+        return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{external_id}/header.jpg"
+    return header_image
+
+
+def _make_store_link(platform: str, external_id: Optional[str], store_url: Optional[str]) -> Optional[str]:
+    """Construct a store URL for a game.
+
+    For Steam games, build the canonical store URL from external_id.
+    For itch games, use the stored store_url.
+    """
+    if platform == "steam" and external_id:
+        return f"https://store.steampowered.com/app/{external_id}"
+    return store_url
+
+
 def get_games_list(
     *,
     platform: Optional[str] = None,
@@ -60,6 +82,8 @@ def get_games_list(
         Filter to 'steam' or 'itch'. None means all.
     min_score:
         Minimum quality score threshold (0.0 = include all).
+        Games with quality_score=None (unscored) are always included.
+        Only games that HAVE a score AND it is below the threshold are excluded.
     sort_by:
         One of 'quality_score', 'growth', 'recency', 'title'.
     genre:
@@ -74,14 +98,22 @@ def get_games_list(
         Number of rows to skip (for pagination).
     """
     repo = _get_repo()
+    # BUG 1 FIX: Always fetch all games (min_quality_score=0) so that unscored
+    # games (quality_score IS NULL) are not silently dropped by the DB filter.
+    # We apply the smart score filter in Python below.
     rows = repo.list_games(
-        min_quality_score=min_score,
+        min_quality_score=0,
         platform=platform,
         genre=genre,
         include_discarded=include_discarded,
         limit=None,   # we sort + slice in Python for flexible sort_by
         offset=0,
     )
+
+    # BUG 1 FIX: Post-filter — unscored games (None) always pass;
+    # only exclude games that HAVE a score below the threshold.
+    if min_score > 0:
+        rows = [r for r in rows if r.quality_score is None or r.quality_score >= min_score]
 
     # Apply search filter.
     if search:
@@ -122,8 +154,9 @@ def get_games_list(
             "release_date": r.release_date,
             "quality_score": r.quality_score,
             "discarded": r.discarded,
-            "store_url": r.store_url,
+            "store_url": _make_store_link(r.platform, r.external_id, r.store_url),
             "header_image": r.header_image,
+            "thumbnail": _make_thumbnail(r.platform, r.external_id, r.header_image),
             "latest_reviews": r.latest_reviews,
             "latest_players": r.latest_players,
             "review_growth": r.review_growth,
@@ -270,9 +303,24 @@ def get_trend_data(*, min_score: float = 0.0) -> dict[str, Any]:
 
 
 def get_reports_list() -> list[dict[str, Any]]:
-    """Return all analysis reports (newest first)."""
+    """Return all analysis reports (newest first).
+
+    BUG 2 FIX: Includes quality_score, release_date, developer, platform,
+    and social_post_count populated from the linked Game record.
+    """
     repo = _get_repo()
     rows = repo.list_reports()
+
+    # Build a set of game_ids to fetch extra info for.
+    game_ids = {r.game_id for r in rows if r.game_id is not None}
+
+    # Fetch game details for all referenced games.
+    game_info: dict[int, dict[str, Any]] = {}
+    for gid in game_ids:
+        detail = get_game_detail(gid)
+        if detail is not None:
+            game_info[gid] = detail
+
     return [
         {
             "id": r.id,
@@ -282,6 +330,12 @@ def get_reports_list() -> list[dict[str, Any]]:
             "lang": r.lang,
             "generated_at": _fmt_dt(r.generated_at),
             "summary_preview": r.summary_preview,
+            # BUG 2 FIX: fields from the Game model
+            "quality_score": r.quality_score,
+            "release_date": r.release_date,
+            "developer": game_info.get(r.game_id, {}).get("developer") if r.game_id else None,
+            "platform": game_info.get(r.game_id, {}).get("platform") if r.game_id else None,
+            "social_post_count": len(game_info.get(r.game_id, {}).get("social_posts", [])) if r.game_id else 0,
         }
         for r in rows
     ]
@@ -306,9 +360,14 @@ def get_report_detail(report_id: int) -> Optional[dict[str, Any]]:
 
 
 def get_dashboard_stats(*, min_score: float = 0.0) -> dict[str, Any]:
-    """Return summary stats for the dashboard header."""
+    """Return summary stats for the dashboard header.
+
+    BUG 4 FIX: Stats always reflect TOTAL counts (min_quality_score=0)
+    regardless of the filter slider, so the numbers don't shift when the
+    user adjusts min_score. Only the game list is filtered.
+    """
     repo = _get_repo()
-    stats = repo.dashboard_stats(min_quality_score=min_score)
+    stats = repo.dashboard_stats(min_quality_score=0)
     return {
         "total_games": stats.total_games,
         "visible_games": stats.visible_games,
@@ -320,3 +379,43 @@ def get_dashboard_stats(*, min_score: float = 0.0) -> dict[str, Any]:
 def get_available_genres() -> list[str]:
     """Return sorted list of all genres present in the database."""
     return _get_repo().available_genres()
+
+
+def get_all_social_posts(*, platform: Optional[str] = None) -> list[dict[str, Any]]:
+    """Return all social posts across all games, most recent first.
+
+    Parameters
+    ----------
+    platform:
+        Optional filter to a specific social platform (e.g. 'reddit', 'youtube').
+    """
+    games = get_games_list()
+    posts: list[dict[str, Any]] = []
+    for game in games:
+        detail = get_game_detail(game["id"])
+        if detail is None:
+            continue
+        for post in detail["social_posts"]:
+            if platform and post.get("platform", "").lower() != platform.lower():
+                continue
+            posts.append(
+                {
+                    **post,
+                    "game_id": game["id"],
+                    "game_title": game["title"],
+                    "game_platform": game["platform"],
+                    "thumbnail": game.get("thumbnail"),
+                }
+            )
+    # Sort: most recent first; posts without a date go last.
+    # Single stable sort: (has_no_date, inverted_date) — False < True so dated
+    # items come first, and within dated items descending string sort is correct
+    # for ISO-8601 date strings.
+    posts.sort(
+        key=lambda p: (p["posted_at"] is None, "" if p["posted_at"] is None else p["posted_at"]),
+        reverse=True,
+    )
+    # Restore: None-date rows were sorted to the FRONT by reverse=True on the
+    # bool (True > False reversed = True first). Push them to the end.
+    posts.sort(key=lambda p: p["posted_at"] is None)
+    return posts

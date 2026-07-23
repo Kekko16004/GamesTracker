@@ -149,7 +149,8 @@ async def dashboard(
         genre=genre,
         search=search,
     )
-    stats = da.get_dashboard_stats(min_score=min_score)
+    # BUG 4 FIX: stats strip always shows totals, not filtered counts.
+    stats = da.get_dashboard_stats(min_score=0.0)
     genres = da.get_available_genres()
 
     # Detect HTMX partial request (only re-render the cards grid).
@@ -195,6 +196,41 @@ async def reports(request: Request) -> HTMLResponse:
     report_list = da.get_reports_list()
     ctx = {**_base_context(request), "reports": report_list}
     return templates.TemplateResponse(request, "reports.html", ctx)
+
+
+@app.get("/reports/{report_id}", response_class=HTMLResponse, tags=["pages"])
+async def report_detail(request: Request, report_id: int) -> HTMLResponse:
+    """Full report detail page with game info card, social posts, and charts."""
+    rep = da.get_report_detail(report_id)
+    if rep is None:
+        raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+    game = da.get_game_detail(rep["game_id"]) if rep.get("game_id") else None
+    ctx = {**_base_context(request), "report": rep, "game": game}
+    return templates.TemplateResponse(request, "report_detail.html", ctx)
+
+
+@app.get("/social", response_class=HTMLResponse, tags=["pages"])
+async def social(
+    request: Request,
+    platform: Optional[str] = Query(None, description="Filter by social platform"),
+) -> HTMLResponse:
+    """Dedicated social monitoring page — all posts across all games."""
+    posts = da.get_all_social_posts(platform=platform)
+    ctx = {
+        **_base_context(request),
+        "posts": posts,
+        "current_platform": platform or "",
+        # Collect distinct social platforms present in the data for the filter UI.
+        "social_platforms": sorted({p["platform"] for p in da.get_all_social_posts() if p.get("platform")}),
+    }
+    return templates.TemplateResponse(request, "social.html", ctx)
+
+
+@app.get("/ai", response_class=HTMLResponse, tags=["pages"])
+async def ai_copilot(request: Request) -> HTMLResponse:
+    """AI Copilot placeholder page."""
+    ctx = {**_base_context(request)}
+    return templates.TemplateResponse(request, "ai.html", ctx)
 
 
 # ---------------------------------------------------------------------------

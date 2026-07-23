@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet"
   />
 
@@ -27,14 +27,17 @@
 
   {% block head_extra %}{% endblock %}
 </head>
-<body>
+<body hx-indicator=".loading-bar">
 
-<!-- ======================== SIDEBAR ======================== -->
+<!-- Global HTMX loading bar -->
+<div class="loading-bar"></div>
+
+<!-- ======================== LAYOUT ======================== -->
 <div class="layout">
   <aside class="sidebar" x-data="{ open: false }" :class="{ 'sidebar--open': open }">
     <div class="sidebar__header">
       <a href="/" class="sidebar__logo">
-        <span class="sidebar__logo-icon">◈</span>
+        <span class="sidebar__logo-icon">GT</span>
         <span class="sidebar__logo-text">GamesTracker</span>
       </a>
       <button class="sidebar__toggle" @click="open = !open" aria-label="Toggle menu">
@@ -45,18 +48,28 @@
     <nav class="sidebar__nav">
       <a href="/"
          class="sidebar__link {% if request.url.path == '/' %}sidebar__link--active{% endif %}">
-        <span class="sidebar__link-icon">▦</span>
+        <span class="sidebar__link-icon">&#x1F3E0;</span>
         Dashboard
       </a>
       <a href="/trends"
          class="sidebar__link {% if request.url.path == '/trends' %}sidebar__link--active{% endif %}">
-        <span class="sidebar__link-icon">↗</span>
+        <span class="sidebar__link-icon">&#x1F4CA;</span>
         Trends
       </a>
       <a href="/reports"
-         class="sidebar__link {% if request.url.path == '/reports' %}sidebar__link--active{% endif %}">
-        <span class="sidebar__link-icon">◧</span>
+         class="sidebar__link {% if request.url.path.startswith('/reports') %}sidebar__link--active{% endif %}">
+        <span class="sidebar__link-icon">&#x1F4CB;</span>
         Reports
+      </a>
+      <a href="/social"
+         class="sidebar__link {% if request.url.path == '/social' %}sidebar__link--active{% endif %}">
+        <span class="sidebar__link-icon">&#x1F310;</span>
+        Social
+      </a>
+      <a href="/health"
+         class="sidebar__link {% if request.url.path == '/health' %}sidebar__link--active{% endif %}">
+        <span class="sidebar__link-icon">&#x1F916;</span>
+        AI Copilot
       </a>
     </nav>
 
@@ -65,6 +78,7 @@
         <span class="pulse"></span>
         API Online
       </a>
+      <span class="sidebar__version">GamesTracker v2 &mdash; Open Source</span>
     </div>
   </aside>
 
@@ -77,9 +91,9 @@
 <!-- ======================== FOOTER ======================== -->
 <footer class="site-footer">
   <div class="site-footer__inner">
-    <span class="site-footer__brand">◈ GamesTracker</span>
+    <span class="site-footer__brand">GamesTracker</span>
     <span class="site-footer__copy">Indie game growth intelligence</span>
-    <span class="site-footer__version">v0.1.0</span>
+    <span class="site-footer__version">v2.0</span>
   </div>
 </footer>
 

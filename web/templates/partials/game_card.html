@@ -1,6 +1,6 @@
-<!-- Single game card — included in dashboard grid and returned as HTMX partial -->
+<!-- Single game card -->
 <article class="game-card" data-game-id="{{ game.id }}">
-  <!-- Header image or placeholder -->
+  <!-- Header image with overlay -->
   <a href="/game/{{ game.id }}" class="game-card__img-wrap">
     {% if game.header_image %}
     <img
@@ -10,13 +10,22 @@
       loading="lazy"
     />
     {% else %}
-    <div class="game-card__img-placeholder">◈</div>
+    <div class="game-card__img-placeholder">&#x1F3AE;</div>
     {% endif %}
 
-    <!-- Platform badge -->
+    <!-- Platform badge top-right -->
     <span class="game-card__platform badge badge--{{ game.platform }}">
       {{ game.platform | platform_label }}
     </span>
+
+    <!-- Quality score circle bottom-left -->
+    {% if game.quality_score is not none %}
+    <span class="game-card__score-circle game-card__score-circle--{% if game.quality_score >= 70 %}high{% elif game.quality_score >= 40 %}mid{% else %}low{% endif %}">
+      {{ "%.0f" | format(game.quality_score) }}
+    </span>
+    {% else %}
+    <span class="game-card__score-circle game-card__score-circle--none">&mdash;</span>
+    {% endif %}
   </a>
 
   <!-- Body -->
@@ -29,43 +38,35 @@
     <p class="game-card__dev">{{ game.developer }}</p>
     {% endif %}
 
-    <!-- Genres -->
+    <!-- Genre pills -->
     {% if game.genres %}
     <div class="game-card__genres">
       {% for g in game.genres[:3] %}
-      <span class="tag">{{ g }}</span>
+      <span class="tag tag--genre">{{ g }}</span>
       {% endfor %}
     </div>
     {% endif %}
 
     <!-- Metrics row -->
     <div class="game-card__metrics">
-      <!-- Quality score gauge -->
-      <div class="score-gauge {{ game.quality_score | score_class }}">
-        <span class="score-gauge__value mono">
-          {% if game.quality_score is not none %}{{ "%.0f" | format(game.quality_score) }}{% else %}—{% endif %}
-        </span>
-        <span class="score-gauge__label">Score</span>
-      </div>
-
       <div class="metric">
         <span class="metric__value mono">
-          {% if game.latest_players is not none %}{{ "{:,}".format(game.latest_players) }}{% else %}—{% endif %}
-        </span>
-        <span class="metric__label">Players</span>
-      </div>
-
-      <div class="metric">
-        <span class="metric__value mono">
-          {% if game.latest_reviews is not none %}{{ "{:,}".format(game.latest_reviews) }}{% else %}—{% endif %}
+          {% if game.latest_reviews is not none %}{{ "{:,}".format(game.latest_reviews) }}{% else %}&mdash;{% endif %}
         </span>
         <span class="metric__label">Reviews</span>
       </div>
 
-      {% if game.review_growth is not none %}
-      <div class="metric metric--growth {% if game.review_growth > 0 %}metric--up{% elif game.review_growth < 0 %}metric--down{% endif %}">
+      <div class="metric">
         <span class="metric__value mono">
-          {% if game.review_growth > 0 %}+{% endif %}{{ "{:,}".format(game.review_growth) }}
+          {% if game.latest_players is not none %}{{ "{:,}".format(game.latest_players) }}{% else %}&mdash;{% endif %}
+        </span>
+        <span class="metric__label">Players</span>
+      </div>
+
+      {% if game.review_growth is not none %}
+      <div class="metric {% if game.review_growth > 0 %}metric--up{% elif game.review_growth < 0 %}metric--down{% endif %}">
+        <span class="metric__value mono">
+          {% if game.review_growth > 0 %}&#x25B2; +{% elif game.review_growth < 0 %}&#x25BC; {% endif %}{{ "{:,}".format(game.review_growth) }}
         </span>
         <span class="metric__label">Growth</span>
       </div>
@@ -80,9 +81,11 @@
 
   <!-- Footer -->
   <div class="game-card__footer">
-    <a href="/game/{{ game.id }}" class="btn btn--sm btn--ghost">View detail →</a>
+    <a href="/game/{{ game.id }}" class="btn btn--sm btn--ghost">View detail &rarr;</a>
     {% if game.store_url %}
-    <a href="{{ game.store_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--sm btn--outline">Store ↗</a>
+    <a href="{{ game.store_url }}" target="_blank" rel="noopener noreferrer" class="game-card__store-link">
+      Store &#x2197;
+    </a>
     {% endif %}
   </div>
 </article>

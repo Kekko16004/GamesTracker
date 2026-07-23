@@ -9,25 +9,28 @@
     <p class="page-header__sub">Comparing {{ data.genre_trends | length }} genres across {{ data.stats.visible_games }} tracked games</p>
   </div>
   <form class="page-header__controls" hx-get="/trends" hx-target="body" hx-push-url="true">
-    <label class="filter-bar__label" for="min_score" x-data="{ score: {{ current_min_score }} }">
-      Min score <span class="mono" x-text="score"></span>
+    <div class="filter-bar__group" x-data="{ score: {{ current_min_score }} }">
+      <label class="filter-bar__label" for="min_score">
+        Min score <span class="mono" x-text="score"></span>
+      </label>
       <input id="min_score" name="min_score" type="range" min="0" max="100" step="5"
-             class="filter-bar__range" x-model="score" value="{{ current_min_score }}" />
-    </label>
+             class="filter-bar__range" x-model="score" value="{{ current_min_score }}"
+             style="min-width: 140px;" />
+    </div>
   </form>
 </div>
 
 <!-- ======== SUMMARY STRIP ======== -->
 <div class="stats-strip">
-  <div class="stat-card">
+  <div class="stat-card stat-card--accent">
     <span class="stat-card__value mono">{{ data.genre_trends | length }}</span>
     <span class="stat-card__label">Genres</span>
   </div>
-  <div class="stat-card">
+  <div class="stat-card stat-card--green">
     <span class="stat-card__value mono">{{ data.stats.visible_games }}</span>
     <span class="stat-card__label">Games</span>
   </div>
-  <div class="stat-card">
+  <div class="stat-card stat-card--amber">
     <span class="stat-card__value mono">{{ data.top_growing | length }}</span>
     <span class="stat-card__label">Top Growing</span>
   </div>
@@ -36,16 +39,14 @@
 <!-- ======== CHARTS ======== -->
 {% if data.genre_trends %}
 <div class="charts-row">
-  <!-- Genre game count bar chart -->
-  <section class="section section--half">
+  <section class="section section--half mt-0">
     <h2 class="section__title">Games per Genre</h2>
     <div class="chart-wrap chart-wrap--tall">
       <canvas id="genreCountChart"></canvas>
     </div>
   </section>
 
-  <!-- Genre avg quality score -->
-  <section class="section section--half">
+  <section class="section section--half mt-0">
     <h2 class="section__title">Avg Quality Score by Genre</h2>
     <div class="chart-wrap chart-wrap--tall">
       <canvas id="genreScoreChart"></canvas>
@@ -53,7 +54,6 @@
   </section>
 </div>
 
-<!-- Genre review growth bar chart -->
 <section class="section">
   <h2 class="section__title">Total Review Growth by Genre</h2>
   <div class="chart-wrap">
@@ -90,16 +90,16 @@
           </td>
           <td>
             {% for g in game.genres[:2] %}
-            <span class="tag tag--sm">{{ g }}</span>
+            <span class="tag tag--sm tag--genre">{{ g }}</span>
             {% endfor %}
           </td>
           <td class="num mono {{ game.quality_score | score_class }}">
-            {{ "%.0f" | format(game.quality_score) if game.quality_score is not none else '—' }}
+            {{ "%.0f" | format(game.quality_score) if game.quality_score is not none else '&mdash;' }}
           </td>
           <td class="num mono {% if game.review_growth and game.review_growth > 0 %}text-up{% endif %}">
             {% if game.review_growth is not none %}
-              {% if game.review_growth > 0 %}+{% endif %}{{ "{:,}".format(game.review_growth) }}
-            {% else %}—{% endif %}
+              {% if game.review_growth > 0 %}&#x25B2; +{% endif %}{{ "{:,}".format(game.review_growth) }}
+            {% else %}&mdash;{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -132,7 +132,7 @@
 
 {% if not data.genre_trends %}
 <div class="empty-state">
-  <div class="empty-state__icon">↗</div>
+  <div class="empty-state__icon">&#x1F4CA;</div>
   <h3 class="empty-state__title">No trend data available</h3>
   <p class="empty-state__sub">Add games with genres through the desktop app to see trends.</p>
 </div>
@@ -143,21 +143,19 @@
 {% block scripts %}
 {% if data.genre_trends %}
 <script>
-  Chart.defaults.color = '#94a3b8';
-  Chart.defaults.borderColor = '#1e293b';
-  Chart.defaults.font.family = 'Inter, sans-serif';
+  Chart.defaults.color = '#9ca3b8';
+  Chart.defaults.borderColor = '#2e3347';
+  Chart.defaults.font.family = "'Inter', sans-serif";
 
   const trends = {{ data.genre_trends | tojson }};
   const labels = trends.map(t => t.genre);
   const palette = [
-    '#6366f1','#38bdf8','#4ade80','#f59e0b','#f43f5e',
-    '#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9',
+    '#6366f1','#06b6d4','#22c55e','#f59e0b','#ef4444',
+    '#a78bfa','#34d399','#fb923c','#38bdf8','#e879f9',
     '#facc15','#2dd4bf','#f97316','#818cf8','#a3e635',
   ];
 
-  function makeColor(idx) {
-    return palette[idx % palette.length];
-  }
+  function makeColor(idx) { return palette[idx % palette.length]; }
 
   // ---- Game count ----
   new Chart(document.getElementById('genreCountChart'), {
@@ -170,7 +168,7 @@
         backgroundColor: labels.map((_, i) => makeColor(i) + 'cc'),
         borderColor: labels.map((_, i) => makeColor(i)),
         borderWidth: 1,
-        borderRadius: 4,
+        borderRadius: 6,
       }],
     },
     options: {
@@ -179,7 +177,7 @@
       indexAxis: 'y',
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { color: '#1e293b' }, beginAtZero: true },
+        x: { grid: { color: '#242836' }, beginAtZero: true },
         y: { grid: { display: false }, ticks: { font: { size: 11 } } },
       },
     },
@@ -196,7 +194,7 @@
         backgroundColor: labels.map((_, i) => makeColor(i) + 'cc'),
         borderColor: labels.map((_, i) => makeColor(i)),
         borderWidth: 1,
-        borderRadius: 4,
+        borderRadius: 6,
       }],
     },
     options: {
@@ -205,7 +203,7 @@
       indexAxis: 'y',
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { color: '#1e293b' }, beginAtZero: true, max: 100 },
+        x: { grid: { color: '#242836' }, beginAtZero: true, max: 100 },
         y: { grid: { display: false }, ticks: { font: { size: 11 } } },
       },
     },
@@ -222,7 +220,7 @@
         backgroundColor: labels.map((_, i) => makeColor(i) + 'cc'),
         borderColor: labels.map((_, i) => makeColor(i)),
         borderWidth: 1,
-        borderRadius: 4,
+        borderRadius: 6,
       }],
     },
     options: {
@@ -231,7 +229,7 @@
       plugins: { legend: { display: false } },
       scales: {
         x: { grid: { display: false } },
-        y: { grid: { color: '#1e293b' }, beginAtZero: true },
+        y: { grid: { color: '#242836' }, beginAtZero: true },
       },
     },
   });

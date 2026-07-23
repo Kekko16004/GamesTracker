@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}AI Copilot — GamesTracker{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__h1">AI Copilot</h1>
+    <p class="page-header__sub">Intelligent analysis and recommendations &mdash; coming soon</p>
+  </div>
+</div>
+
+<div class="empty-state">
+  <div class="empty-state__icon">&#x1F916;</div>
+  <h3 class="empty-state__title">AI Copilot is on the way</h3>
+  <p class="empty-state__sub">
+    The AI Copilot will surface actionable insights &mdash; which games to investigate, genre
+    opportunities, growth anomalies and more. Check back soon.
+  </p>
+  <div style="display: flex; gap: 12px; margin-top: 16px;">
+    <a href="/" class="btn btn--md btn--primary">Back to Dashboard</a>
+    <a href="/reports" class="btn btn--md btn--ghost">View Reports</a>
+  </div>
+</div>
+{% endblock %}

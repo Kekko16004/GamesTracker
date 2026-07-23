@@ -11,39 +11,59 @@
 </div>
 
 {% if reports %}
-<div class="reports-list">
+<div class="reports-grid">
   {% for rep in reports %}
   <article class="report-card">
-    <div class="report-card__header">
-      <div class="report-card__meta">
-        <span class="badge badge--lang">{{ rep.lang | upper }}</span>
-        {% if rep.game_title %}
-        <span class="report-card__game">
-          {% if rep.game_id %}
-          <a href="/game/{{ rep.game_id }}" class="text-link">{{ rep.game_title }}</a>
-          {% else %}
-          {{ rep.game_title }}
-          {% endif %}
-        </span>
-        {% endif %}
-        {% if rep.genre %}
-        <span class="tag">{{ rep.genre }}</span>
-        {% endif %}
-      </div>
-      <span class="report-card__date mono muted">{{ rep.generated_at[:10] if rep.generated_at else '—' }}</span>
+    <!-- Game title -->
+    <div class="report-card__game-title">
+      {% if rep.game_id %}
+      <a href="/game/{{ rep.game_id }}" class="text-link" style="color: var(--text-primary);">{{ rep.game_title or 'Untitled Game' }}</a>
+      {% else %}
+      {{ rep.game_title or 'Untitled Game' }}
+      {% endif %}
     </div>
+
+    <!-- Meta row: badges -->
+    <div class="report-card__meta">
+      <span class="badge badge--lang">{{ rep.lang | upper }}</span>
+      {% if rep.platform %}
+      <span class="badge badge--{{ rep.platform }}">{{ rep.platform | platform_label }}</span>
+      {% endif %}
+      {% if rep.genre %}
+      <span class="tag tag--genre">{{ rep.genre }}</span>
+      {% endif %}
+      {% if rep.developer %}
+      <span class="muted" style="font-size: 0.8rem;">by {{ rep.developer }}</span>
+      {% endif %}
+      {% if rep.quality_score is not none %}
+      <span class="badge {% if rep.quality_score >= 70 %}badge--free{% elif rep.quality_score >= 40 %}badge--price{% else %}badge--lang{% endif %}" style="margin-left: auto;">
+        {{ "%.0f" | format(rep.quality_score) }}
+      </span>
+      {% endif %}
+      <span class="report-card__date mono">{{ rep.generated_at[:10] if rep.generated_at else '&mdash;' }}</span>
+    </div>
+
+    {% if rep.release_date %}
+    <div style="font-size: 0.78rem; color: var(--text-muted);">Released {{ rep.release_date }}</div>
+    {% endif %}
+
+    <!-- Summary preview -->
     <p class="report-card__preview">{{ rep.summary_preview }}</p>
+
+    <!-- Footer -->
     <div class="report-card__footer">
-      <a href="/api/reports/{{ rep.id }}" target="_blank" rel="noopener noreferrer" class="btn btn--sm btn--ghost">
-        Full report (JSON) ↗
-      </a>
+      <a href="/reports/{{ rep.id }}" class="btn btn--sm btn--primary">View full report &rarr;</a>
+      {% if rep.game_id %}
+      <a href="/game/{{ rep.game_id }}" class="btn btn--sm btn--ghost">Game detail</a>
+      {% endif %}
+      <a href="/api/reports/{{ rep.id }}" target="_blank" rel="noopener noreferrer" class="btn btn--sm btn--ghost">JSON &#x2197;</a>
     </div>
   </article>
   {% endfor %}
 </div>
 {% else %}
 <div class="empty-state">
-  <div class="empty-state__icon">◧</div>
+  <div class="empty-state__icon">&#x1F4CB;</div>
   <h3 class="empty-state__title">No reports yet</h3>
   <p class="empty-state__sub">Generate reports through the desktop analysis tools and they will appear here.</p>
 </div>

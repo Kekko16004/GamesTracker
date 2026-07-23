@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Social Monitoring — GamesTracker{% endblock %}
+
+{% block content %}
+<!-- ======== HEADER ======== -->
+<div class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__h1">Social Monitoring</h1>
+    <p class="page-header__sub">{{ posts | length }} post{% if posts | length != 1 %}s{% endif %} across all games{% if current_platform %} &middot; filtered by {{ current_platform }}{% endif %}</p>
+  </div>
+</div>
+
+<!-- ======== PLATFORM FILTER ======== -->
+<div class="social-filter-bar" x-data="{ platform: '{{ current_platform or '' }}' }">
+  <a href="/social"
+     class="social-filter-btn {% if not current_platform %}active{% endif %}">
+    All
+  </a>
+  {% for plat in social_platforms %}
+  <a href="/social?platform={{ plat }}"
+     class="social-filter-btn {% if current_platform == plat %}active{% endif %}">
+    {{ plat | social_icon }} {{ plat | capitalize }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- ======== POSTS GRID ======== -->
+{% if posts %}
+<div class="social-posts-grid">
+  {% for post in posts %}
+  <div class="social-post-card" data-platform="{{ post.platform | lower }}">
+    <div class="social-post-card__header">
+      <div class="social-post-card__platform-icon social-post-card__platform-icon--{{ post.platform | lower }}">
+        {{ post.platform | social_icon }}
+      </div>
+      <div class="social-post-card__platform-info">
+        <span class="social-post-card__platform-name">{{ post.platform }}</span>
+        {% if post.game_id %}
+        <a href="/game/{{ post.game_id }}" class="social-post-card__game-link">{{ post.game_title or 'Unknown Game' }}</a>
+        {% else %}
+        <span class="social-post-card__game-link">{{ post.game_title or 'Unknown Game' }}</span>
+        {% endif %}
+      </div>
+      <span class="social-post-card__date">{{ post.posted_at[:10] if post.posted_at else '&mdash;' }}</span>
+    </div>
+
+    <div class="social-post-card__title">
+      {% if post.url %}
+      <a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">{{ post.title or '(no title)' }}</a>
+      {% else %}
+      {{ post.title or '&mdash;' }}
+      {% endif %}
+    </div>
+
+    {% if post.subreddit %}
+    <span style="font-size: 0.75rem; color: var(--text-muted);">r/{{ post.subreddit }}</span>
+    {% endif %}
+
+    {% if post.url %}
+    <a href="{{ post.url }}" target="_blank" rel="noopener noreferrer" class="social-post-card__url">
+      &#x1F517; {{ post.url[:55] }}{% if post.url | length > 55 %}...{% endif %}
+    </a>
+    {% endif %}
+
+    <div class="social-post-card__metrics">
+      {% if post.views is not none %}
+      <span class="social-metric">
+        <span class="social-metric__icon">&#x1F441;</span>
+        <span class="social-metric__value">{{ "{:,}".format(post.views) }}</span>
+      </span>
+      {% endif %}
+      {% if post.likes is not none %}
+      <span class="social-metric">
+        <span class="social-metric__icon">&#x2764;</span>
+        <span class="social-metric__value">{{ "{:,}".format(post.likes) }}</span>
+      </span>
+      {% endif %}
+      {% if post.comments is not none %}
+      <span class="social-metric">
+        <span class="social-metric__icon">&#x1F4AC;</span>
+        <span class="social-metric__value">{{ "{:,}".format(post.comments) }}</span>
+      </span>
+      {% endif %}
+      {% if post.shares is not none %}
+      <span class="social-metric">
+        <span class="social-metric__icon">&#x1F501;</span>
+        <span class="social-metric__value">{{ "{:,}".format(post.shares) }}</span>
+      </span>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state__icon">&#x1F310;</div>
+  <h3 class="empty-state__title">No social posts found</h3>
+  <p class="empty-state__sub">
+    {% if current_platform %}
+    No {{ current_platform }} posts found. <a href="/social" class="text-link">Clear the filter</a> to see all posts.
+    {% else %}
+    Social posts will appear here once they are scraped through the desktop app.
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+{% endblock %}

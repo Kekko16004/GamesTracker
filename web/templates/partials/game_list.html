@@ -1,12 +1,14 @@
-<!-- HTMX partial: refreshed games grid (replaces #games-grid content) -->
+<!-- HTMX partial: refreshed games grid -->
+<div id="games-grid" class="games-grid">
 {% if games %}
   {% for game in games %}
     {% include "partials/game_card.html" %}
   {% endfor %}
 {% else %}
 <div class="empty-state">
-  <div class="empty-state__icon">◈</div>
+  <div class="empty-state__icon">&#x1F50D;</div>
   <h3 class="empty-state__title">No games match your filters</h3>
   <p class="empty-state__sub">Try loosening the quality score threshold or clearing the search.</p>
 </div>
 {% endif %}
+</div>
