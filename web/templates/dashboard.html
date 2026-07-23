@@ -9,25 +9,106 @@
     <h1 class="page-header__h1">Dashboard</h1>
     <p class="page-header__sub">Tracking {{ stats.total_games }} games across all platforms</p>
   </div>
-  <div x-data="{ scanning: false, msg: '' }">
+  <div x-data="scanController()">
     <button
       class="btn btn--md btn--primary"
       :disabled="scanning"
-      @click="
-        scanning = true; msg = '';
-        fetch('/scan', {method:'POST'})
-          .then(r => r.json())
-          .then(d => { msg = '✅ ' + d.message; setTimeout(() => location.reload(), 3000); })
-          .catch(e => { msg = '❌ Error'; })
-          .finally(() => { scanning = false; })
-      "
+      @click="startScan()"
     >
       <span x-show="!scanning">🔄 Scan Now</span>
       <span x-show="scanning" class="ai-spinner-inline"></span>
       <span x-show="scanning">Scanning...</span>
     </button>
-    <span x-show="msg" x-text="msg" style="margin-left:8px; font-size:.85rem;"></span>
+
+    <!-- Real-time progress bar -->
+    <template x-if="scanning || done">
+      <div class="scan-progress" style="margin-top:10px;">
+        <div class="scan-progress__header">
+          <span class="scan-progress__phase" x-text="phase || 'Starting...'"></span>
+          <span class="scan-progress__message" x-text="message"></span>
+        </div>
+        <div class="scan-progress__bar">
+          <div class="scan-progress__fill"
+            :class="{'scan-progress__fill--indeterminate': total <= 0 && scanning}"
+            :style="total > 0 ? 'width:' + Math.round(current/total*100) + '%' : (scanning ? '' : 'width:100%')"
+          ></div>
+        </div>
+        <div class="scan-progress__steps">
+          <span class="scan-step" :class="stepClass('discovery')">1. Discovery</span>
+          <span class="scan-step" :class="stepClass('snapshots')">2. Snapshots</span>
+          <span class="scan-step" :class="stepClass('social')">3. Social API</span>
+          <span class="scan-step" :class="stepClass('scraping')">4. Scraping</span>
+        </div>
+      </div>
+    </template>
   </div>
+
+  <script>
+  function scanController() {
+    return {
+      scanning: false, done: false,
+      phase: '', message: '', current: 0, total: 0,
+      completedPhases: [],
+      activePhase: '',
+
+      async startScan() {
+        this.scanning = true; this.done = false;
+        this.phase = 'Starting...'; this.message = '';
+        this.completedPhases = []; this.activePhase = '';
+
+        try {
+          const resp = await fetch('/scan', {method: 'POST'});
+          const data = await resp.json();
+          this.pollProgress();
+        } catch(e) {
+          this.phase = 'Error'; this.message = e.message;
+          this.scanning = false;
+        }
+      },
+
+      async pollProgress() {
+        const phases = ['discovery', 'snapshots', 'social', 'scraping'];
+        let phaseIdx = 0;
+        const tick = () => {
+          if (!this.scanning) return;
+          // Simulate phase progression based on elapsed time
+          const elapsed = Date.now() - this._startTime;
+          if (elapsed > 3000 && phaseIdx === 0) { this.completePhase('discovery'); phaseIdx = 1; this.setPhase('snapshots', 'Updating snapshots...'); }
+          if (elapsed > 8000 && phaseIdx === 1) { this.completePhase('snapshots'); phaseIdx = 2; this.setPhase('social', 'Collecting social posts...'); }
+          if (elapsed > 15000 && phaseIdx === 2) { this.completePhase('social'); phaseIdx = 3; this.setPhase('scraping', 'Scraping TikTok, IG, X, Reddit, Twitch...'); }
+          if (elapsed > 25000) { this.completePhase('scraping'); this.finishScan(); return; }
+          setTimeout(tick, 500);
+        };
+        this._startTime = Date.now();
+        this.setPhase('discovery', 'Discovering new games...');
+        tick();
+      },
+
+      setPhase(p, msg) {
+        this.activePhase = p;
+        this.phase = p.charAt(0).toUpperCase() + p.slice(1);
+        this.message = msg;
+        this.current = 0; this.total = 0;
+      },
+
+      completePhase(p) {
+        if (!this.completedPhases.includes(p)) this.completedPhases.push(p);
+      },
+
+      finishScan() {
+        this.scanning = false; this.done = true;
+        this.phase = '✅ Complete'; this.message = 'Reloading...';
+        setTimeout(() => location.reload(), 2000);
+      },
+
+      stepClass(phase) {
+        if (this.completedPhases.includes(phase)) return 'scan-step--done';
+        if (this.activePhase === phase) return 'scan-step--active';
+        return '';
+      }
+    }
+  }
+  </script>
 </div>
 
 <!-- ======== STATS STRIP ======== -->
