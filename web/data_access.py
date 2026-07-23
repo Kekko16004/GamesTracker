@@ -330,28 +330,39 @@ def get_games_list(
                         "revenue_flag": revenue_flag, "price_val": price_val})
 
     # Apply custom sort.
-    if sort_by == "growth":
-        result.sort(key=lambda d: d["_row"].review_growth or 0, reverse=True)
-    elif sort_by == "recency":
-        result.sort(key=lambda d: d["_row"].release_date is None)
-        result.sort(
-            key=lambda d: d["_row"].release_date or "",
-            reverse=True,
-        )
-        result.sort(key=lambda d: d["_row"].release_date is None)
-    elif sort_by == "title":
-        result.sort(key=lambda d: d["_row"].title.lower())
-    elif sort_by == "reviews":
-        result.sort(key=lambda d: d["_row"].latest_reviews or 0, reverse=True)
-    elif sort_by == "players":
-        result.sort(key=lambda d: d["_row"].latest_players or 0, reverse=True)
-    elif sort_by == "price":
+    if sort_by in ("growth", "growth_desc"):
+        result.sort(key=lambda d: (d["_row"].review_growth is None, -(d["_row"].review_growth or 0)))
+    elif sort_by == "growth_asc":
+        result.sort(key=lambda d: (d["_row"].review_growth is None, d["_row"].review_growth or 0))
+    elif sort_by in ("revenue_desc", "revenue"):
+        result.sort(key=lambda d: (d["revenue_flag"].get("estimated_revenue_avg") is None, -(d["revenue_flag"].get("estimated_revenue_avg") or 0)))
+    elif sort_by == "revenue_asc":
+        result.sort(key=lambda d: (d["revenue_flag"].get("estimated_revenue_avg") is None, d["revenue_flag"].get("estimated_revenue_avg") or 0))
+    elif sort_by == "price_desc":
+        result.sort(key=lambda d: (d["price_val"] is None, -(d["price_val"] or 0)))
+    elif sort_by in ("price", "price_asc"):
         result.sort(key=lambda d: (d["price_val"] is None, d["price_val"] or 0))
-    elif sort_by == "newest":
-        result.sort(key=lambda d: d["_row"].release_date or "", reverse=True)
-        result.sort(key=lambda d: d["_row"].release_date is None)
-    else:
+    elif sort_by in ("reviews", "reviews_desc"):
+        result.sort(key=lambda d: (d["_row"].latest_reviews is None, -(d["_row"].latest_reviews or 0)))
+    elif sort_by == "reviews_asc":
+        result.sort(key=lambda d: (d["_row"].latest_reviews is None, d["_row"].latest_reviews or 0))
+    elif sort_by in ("players", "players_desc"):
+        result.sort(key=lambda d: (d["_row"].latest_players is None, -(d["_row"].latest_players or 0)))
+    elif sort_by == "players_asc":
+        result.sort(key=lambda d: (d["_row"].latest_players is None, d["_row"].latest_players or 0))
+    elif sort_by == "title_desc":
+        result.sort(key=lambda d: d["_row"].title.lower(), reverse=True)
+    elif sort_by in ("title", "title_asc"):
+        result.sort(key=lambda d: d["_row"].title.lower())
+    elif sort_by in ("date_asc", "oldest"):
+        result.sort(key=lambda d: (d["_row"].release_date is None, d["_row"].release_date or ""))
+    elif sort_by in ("recency", "newest", "date_desc"):
+        result.sort(key=lambda d: (d["_row"].release_date is None, d["_row"].release_date or ""), reverse=True)
+    elif sort_by == "quality_score_asc":
+        result.sort(key=lambda d: (d["_row"].quality_score is None, d["_row"].quality_score or 0))
+    else:  # quality_score / quality_score_desc
         result.sort(key=lambda d: (d["_row"].quality_score is None, -(d["_row"].quality_score or 0)))
+
 
     # Slice for pagination.
     if offset:

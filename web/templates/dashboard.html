@@ -171,16 +171,32 @@
     <div class="filter-bar__group">
       <label class="filter-bar__label" for="sort_by">Sort by</label>
       <select id="sort_by" name="sort_by" class="filter-bar__select">
-        <option value="quality_score" {% if current_sort == 'quality_score' %}selected{% endif %}>Quality Score ↓</option>
-        <option value="growth"   {% if current_sort == 'growth'   %}selected{% endif %}>Growth ↓</option>
-        <option value="newest"   {% if current_sort == 'newest'   %}selected{% endif %}>Newest First</option>
-        <option value="recency"  {% if current_sort == 'recency'  %}selected{% endif %}>Release Date</option>
-        <option value="reviews"  {% if current_sort == 'reviews'  %}selected{% endif %}>Most Reviews</option>
-        <option value="players"  {% if current_sort == 'players'  %}selected{% endif %}>Most Players</option>
-        <option value="price"    {% if current_sort == 'price'    %}selected{% endif %}>Price ↑</option>
-        <option value="title"    {% if current_sort == 'title'    %}selected{% endif %}>Title A–Z</option>
+        <option value="quality_score" {% if current_sort == 'quality_score' or current_sort == 'quality_score_desc' %}selected{% endif %}>Quality Score (Decrescente ↓)</option>
+        <option value="quality_score_asc" {% if current_sort == 'quality_score_asc' %}selected{% endif %}>Quality Score (Crescente ↑)</option>
+        
+        <option value="revenue_desc" {% if current_sort == 'revenue_desc' or current_sort == 'revenue' %}selected{% endif %}>Stima Ricavi (Decrescente ↓)</option>
+        <option value="revenue_asc" {% if current_sort == 'revenue_asc' %}selected{% endif %}>Stima Ricavi (Crescente ↑)</option>
+
+        <option value="growth" {% if current_sort == 'growth' or current_sort == 'growth_desc' %}selected{% endif %}>Crescita (Decrescente ↓)</option>
+        <option value="growth_asc" {% if current_sort == 'growth_asc' %}selected{% endif %}>Crescita (Crescente ↑)</option>
+
+        <option value="price_desc" {% if current_sort == 'price_desc' %}selected{% endif %}>Prezzo (Decrescente ↓)</option>
+        <option value="price" {% if current_sort == 'price' or current_sort == 'price_asc' %}selected{% endif %}>Prezzo (Crescente ↑)</option>
+
+        <option value="reviews" {% if current_sort == 'reviews' or current_sort == 'reviews_desc' %}selected{% endif %}>Recensioni (Decrescente ↓)</option>
+        <option value="reviews_asc" {% if current_sort == 'reviews_asc' %}selected{% endif %}>Recensioni (Crescente ↑)</option>
+
+        <option value="players" {% if current_sort == 'players' or current_sort == 'players_desc' %}selected{% endif %}>Giocatori Attuali (Decrescente ↓)</option>
+        <option value="players_asc" {% if current_sort == 'players_asc' %}selected{% endif %}>Giocatori Attuali (Crescente ↑)</option>
+
+        <option value="newest" {% if current_sort == 'newest' or current_sort == 'recency' or current_sort == 'date_desc' %}selected{% endif %}>Data Uscita (Più Recenti ↓)</option>
+        <option value="date_asc" {% if current_sort == 'date_asc' or current_sort == 'oldest' %}selected{% endif %}>Data Uscita (Meno Recenti ↑)</option>
+
+        <option value="title" {% if current_sort == 'title' or current_sort == 'title_asc' %}selected{% endif %}>Titolo (A–Z ↓)</option>
+        <option value="title_desc" {% if current_sort == 'title_desc' %}selected{% endif %}>Titolo (Z–A ↑)</option>
       </select>
     </div>
+
 
     <!-- Toggle advanced filters & Reset -->
     <div class="filter-bar__group" style="align-self:flex-end; display:flex; gap:6px;">

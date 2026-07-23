@@ -19,6 +19,9 @@
 - [x] apply patch eb2cdd8b-ed72-44f3-a7c6-b78f36441ffb.patch to main & push (100%)
 - [x] fix GameRow price/is_free fields & 3-way owner average recoup calculation (100%)
 - [x] add estimated_revenue field to game dicts, game_card.html & game_detail.html (100%)
+- [x] add ASC/DESC sort options for all fields including estimated revenue (100%)
+
+
 
 
 
