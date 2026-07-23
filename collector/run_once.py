@@ -170,27 +170,17 @@ def _build_scraping_maps() -> tuple[dict[str, int], dict[str, list[str]]]:
 
 
 def _run_scraping_phase(emit: EmitFn) -> None:
-    """Fase scraping: TikTok, Instagram, X, Reddit (senza API key).
+    """Fase scraping: TikTok, Instagram, X, Reddit, Twitch, Kick.
 
     Usa il nuovo scraping engine (core.sources.social.scraping_orchestrator).
     Cerca ogni gioco per TITOLO, per SVILUPPATORE/PUBLISHER e per la query
     combinata "titolo sviluppatore", poi dedup per post_url prima di salvare.
-    Attivo SOLO se SCRAPING_ENABLED=true nel config/.env.
+
+    SEMPRE attivo quando include_social=True (l'utente ha cliccato Scan Now).
+    Il gate SCRAPING_ENABLED resta solo nello scheduler automatico.
     """
-    from core.config import get_settings
-
-    settings = get_settings()
-    scraping_enabled = getattr(settings, "scraping_enabled", False)
-
-    if not scraping_enabled:
-        emit(
-            "scraping", "skip", 0, None,
-            "Scraping social disabilitato (SCRAPING_ENABLED=false in .env)"
-        )
-        return
-
     emit("scraping", "start", 0, None,
-         "Scraping TikTok, Instagram, X, Reddit...")
+         "Scraping TikTok, Instagram, X, Reddit, Twitch, Kick...")
     try:
         from core.sources.social.scraping_orchestrator import run_once_sync
         game_id_map, game_aliases = _build_scraping_maps()
