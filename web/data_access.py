@@ -123,8 +123,9 @@ def _compute_revenue_flag(
     """
     if is_free:
         return {"flag": "free", "label_it": "Gratis", "label_en": "Free",
-                "estimated_revenue_min": 0, "estimated_revenue_max": 0,
-                "estimated_owners": 0, "details": "Free to play"}
+                "estimated_revenue_min": 0, "estimated_revenue_max": 0, "estimated_revenue_avg": 0,
+                "estimated_owners": {"low": 0, "med": 0, "high": 0, "avg": 0, "method": "free"},
+                "details": "Free to play"}
 
     # Estimate owners using average of 3 methods
     est = _estimate_owners_3way(reviews, owners_estimate)
@@ -132,7 +133,7 @@ def _compute_revenue_flag(
 
     if owners <= 0:
         return {"flag": "unknown", "label_it": "Dati insufficienti", "label_en": "Insufficient data",
-                "estimated_revenue_min": None, "estimated_revenue_max": None,
+                "estimated_revenue_min": None, "estimated_revenue_max": None, "estimated_revenue_avg": None,
                 "estimated_owners": est,
                 "details": "Non ci sono abbastanza dati (recensioni/giocatori) per stimare"}
 
