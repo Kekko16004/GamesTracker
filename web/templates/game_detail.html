@@ -100,6 +100,12 @@
       </span>
       <span class="metric-card__label">Release Date</span>
     </div>
+    <div class="metric-card" style="border:1px solid rgba(99,102,241,0.4); background:rgba(99,102,241,0.08);" title="{% if game.revenue_flag %}{{ game.revenue_flag.details }}{% endif %}">
+      <span class="metric-card__value mono" style="color:var(--text-accent);">
+        {% if game.estimated_revenue %}{{ game.estimated_revenue }}{% else %}&mdash;{% endif %}
+      </span>
+      <span class="metric-card__label">Est. Net Revenue 💰</span>
+    </div>
     {% if game.demo_release_date %}
     <div class="metric-card">
       <span class="metric-card__value mono">{{ game.demo_release_date }}</span>
@@ -108,6 +114,7 @@
     {% endif %}
   </div>
 </section>
+
 
 <!-- ======== TABS ======== -->
 <div x-data="{ tab: 'overview' }">

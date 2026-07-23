@@ -47,7 +47,21 @@ _STEAM_CUT = 0.30
 _DEFAULT_PRICE_MIN = 3.99   # assume minimum indie price if unknown
 _DEFAULT_PRICE_MAX = 14.99  # assume maximum indie price if unknown
 
+def _fmt_currency(amount: Optional[float]) -> str:
+    """Format currency values into $18.1k, $1.5M, etc."""
+    if amount is None:
+        return "N/D"
+    if amount == 0:
+        return "$0"
+    if amount >= 1_000_000:
+        return f"${amount / 1_000_000:.1f}M"
+    if amount >= 1_000:
+        return f"${amount / 1_000:.1f}k"
+    return f"${amount:.0f}"
+
+
 # Owner estimation from reviews: VG Insights / Gamalytic research shows
+
 # the review-to-owner multiplier ranges from 20x to 80x depending on genre
 # and visibility. Median for indie games is ~30-50x.
 # Source: https://newsletter.gamediscover.co/p/how-many-units-has-a-steam-game-sold
@@ -345,6 +359,8 @@ def get_games_list(
     final = []
     for d in result:
         r = d["_row"]
+        rf = d["revenue_flag"]
+        rev_avg = rf.get("estimated_revenue_avg")
         final.append({
             "id": r.id,
             "platform": r.platform,
@@ -363,7 +379,10 @@ def get_games_list(
             "review_growth": r.review_growth,
             "price": d["price"],
             "is_free": d["is_free"],
-            "revenue_flag": d["revenue_flag"],
+            "revenue_flag": rf,
+            "estimated_revenue": _fmt_currency(rev_avg),
+            "estimated_revenue_raw": rev_avg,
+            "estimated_owners_avg": rf.get("estimated_owners", {}).get("avg", 0),
         })
     return final
 
@@ -376,6 +395,11 @@ def get_game_detail(game_id: int) -> Optional[dict[str, Any]]:
         return None
 
     g = detail.game
+    revenue_flag = _compute_revenue_flag(
+        detail.price, detail.is_free, g.latest_players, reviews=g.latest_reviews
+    )
+    rev_avg = revenue_flag.get("estimated_revenue_avg")
+
     return {
         "id": g.id,
         "platform": g.platform,
@@ -390,6 +414,10 @@ def get_game_detail(game_id: int) -> Optional[dict[str, Any]]:
         "demo_release_date": detail.demo_release_date,
         "price": detail.price,
         "is_free": detail.is_free,
+        "revenue_flag": revenue_flag,
+        "estimated_revenue": _fmt_currency(rev_avg),
+        "estimated_revenue_raw": rev_avg,
+        "estimated_owners_avg": revenue_flag.get("estimated_owners", {}).get("avg", 0),
         "store_url": g.store_url,
         "header_image": g.header_image,
         "quality_score": g.quality_score,
@@ -397,6 +425,7 @@ def get_game_detail(game_id: int) -> Optional[dict[str, Any]]:
         "latest_reviews": g.latest_reviews,
         "latest_players": g.latest_players,
         "review_growth": g.review_growth,
+
         "snapshots": [
             {
                 "captured_at": _fmt_dt(s.captured_at),

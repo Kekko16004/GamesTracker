@@ -74,7 +74,7 @@
     </div>
 
     <!-- Price + Revenue flag -->
-    <div class="game-card__price-row">
+    <div class="game-card__price-row" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
       {% if game.is_free %}
         <span class="price-badge price-badge--free">Free</span>
       {% elif game.price %}
@@ -85,7 +85,13 @@
           {{ game.revenue_flag.label_en }}
         </span>
       {% endif %}
+      {% if game.estimated_revenue and game.estimated_revenue != 'N/D' %}
+        <span class="badge badge--price" style="background:rgba(99,102,241,0.15); color:#a5b4fc; border:1px solid rgba(99,102,241,0.3);" title="Stima Ricavi Netti (media 3 stime): {{ game.revenue_flag.details }}">
+          💰 Est. Rev: {{ game.estimated_revenue }}
+        </span>
+      {% endif %}
     </div>
+
 
     <!-- Release date -->
     {% if game.release_date %}
