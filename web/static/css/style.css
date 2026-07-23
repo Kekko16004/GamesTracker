@@ -24,10 +24,10 @@
   --text-muted:      #5c6380;
   --text-link:       #818cf8;
 
-  /* Accent colours */
-  --accent:         #6366f1;
-  --accent-hover:   #4f46e5;
-  --accent-glow:    rgba(99,102,241,0.25);
+  /* Accent colours — orange */
+  --accent:         #f97316;
+  --accent-hover:   #ea580c;
+  --accent-glow:    rgba(249,115,22,0.25);
   --green:          #22c55e;
   --amber:          #f59e0b;
   --red:            #ef4444;
@@ -64,8 +64,8 @@
   --s5: 20px;  --s6: 24px;  --s8: 32px;  --s10: 40px;
   --s12: 48px; --s16: 64px;
 
-  /* Radius */
-  --r-sm: 6px;  --r-md: 10px;  --r-lg: 14px;  --r-xl: 18px;  --r-full: 9999px;
+  /* Radius — squared look */
+  --r-sm: 3px;  --r-md: 4px;  --r-lg: 6px;  --r-xl: 8px;  --r-full: 9999px;
 
   /* Transitions */
   --ease:  180ms cubic-bezier(.4,0,.2,1);
@@ -157,12 +157,12 @@ button { font-family: inherit; }
   width: 32px;
   height: 32px;
   border-radius: var(--r-md);
-  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  background: linear-gradient(135deg, var(--accent), #fb923c);
   color: #fff;
   font-size: 0.9rem;
   font-weight: 800;
   flex-shrink: 0;
-  box-shadow: 0 0 16px rgba(99,102,241,0.3);
+  box-shadow: 0 0 16px rgba(249,115,22,0.3);
 }
 
 .sidebar__toggle {
@@ -212,7 +212,7 @@ button { font-family: inherit; }
   color: var(--text-primary);
 }
 .sidebar__link--active {
-  background: rgba(99,102,241,0.12);
+  background: rgba(249,115,22,0.12);
   color: var(--accent);
   font-weight: 600;
 }
@@ -742,7 +742,7 @@ button { font-family: inherit; }
   border-color: var(--accent);
   box-shadow: 0 2px 8px rgba(99,102,241,0.3);
 }
-.btn--primary:hover { background: var(--accent-hover); color: #fff; box-shadow: 0 4px 16px rgba(99,102,241,0.4); }
+.btn--primary:hover { background: var(--accent-hover); color: #fff; box-shadow: 0 4px 16px rgba(249,115,22,0.4); }
 
 .btn--ghost {
   background: transparent;
@@ -1912,4 +1912,106 @@ button { font-family: inherit; }
 @media (max-width: 640px) {
   .filter-bar__row { flex-direction: column; }
   .filter-bar__row .filter-bar__group { width: 100%; }
+}
+
+/* ==========================================================================
+   DROPDOWN / SELECT DARK THEME FIX
+   ========================================================================== */
+
+select,
+select option,
+.filter-bar__select option,
+.form-select option {
+  background-color: #1a1d27 !important;
+  color: #e4e7ef !important;
+}
+select:focus,
+.filter-bar__select:focus,
+.form-select:focus {
+  border-color: var(--accent) !important;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+/* Webkit dropdown styling */
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 50px #1a1d27 inset;
+  -webkit-text-fill-color: #e4e7ef;
+}
+
+/* ==========================================================================
+   SCAN PROGRESS BAR (real-time collector progress)
+   ========================================================================== */
+
+.scan-progress {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  animation: fadeIn .3s ease;
+}
+.scan-progress__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.scan-progress__phase {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.scan-progress__message {
+  font-size: .8rem;
+  color: var(--text-secondary);
+}
+.scan-progress__bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.scan-progress__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width .4s ease;
+}
+.scan-progress__fill--indeterminate {
+  width: 30%;
+  animation: indeterminate 1.5s ease-in-out infinite;
+}
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.scan-progress__steps {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.scan-step {
+  font-size: .7rem;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.scan-step--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+.scan-step--done {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(34,197,94,.1);
+}
+.scan-step--error {
+  border-color: var(--red);
+  color: var(--red);
 }
