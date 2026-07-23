@@ -634,15 +634,26 @@ def get_ai_context_data() -> dict[str, Any]:
 def get_available_tags() -> list[str]:
     """Return sorted list of all unique tags/genres across all games.
 
-    Splits comma-separated genre strings and collects every unique tag.
+    Handles both list of genres and comma-separated genre strings.
     """
     repo = _get_repo()
     all_games = repo.list_games(min_quality_score=0, limit=None, offset=0)
     tag_set: set[str] = set()
     for g in all_games:
-        if g.genres:
-            for part in g.genres.split(","):
+        genres = getattr(g, "genres", None)
+        if not genres:
+            continue
+        if isinstance(genres, list):
+            for item in genres:
+                if isinstance(item, str):
+                    for part in item.split(","):
+                        t = part.strip()
+                        if t:
+                            tag_set.add(t)
+        elif isinstance(genres, str):
+            for part in genres.split(","):
                 t = part.strip()
                 if t:
                     tag_set.add(t)
     return sorted(tag_set)
+
