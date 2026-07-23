@@ -122,6 +122,9 @@ def _compute_revenue_flag(
                 "estimated_owners": est,
                 "details": "Non ci sono abbastanza dati (recensioni/giocatori) per stimare"}
 
+    low_owners = est.get("low", owners)
+    high_owners = est.get("high", owners)
+
     p = None
     if price is not None:
         try:
@@ -130,18 +133,11 @@ def _compute_revenue_flag(
             pass
 
     if p is not None and p > 0:
-        net = p * owners * (1 - _STEAM_CUT)
-        flag = "recouped" if net >= _STEAM_FEE else "not_recouped"
-        label_it = "Rientrato ✅" if flag == "recouped" else "Non rientrato ❌"
-        label_en = "Recouped ✅" if flag == "recouped" else "Not recouped ❌"
-        return {"flag": flag, "label_it": label_it, "label_en": label_en,
-                "estimated_revenue_min": round(net, 2), "estimated_revenue_max": round(net, 2),
-                "estimated_owners": est,
-                "details": f"${p:.2f} × {owners} owners (avg 3 stime) × 0.70 = ${net:.0f} net"}
-    else:
-        # Price unknown — estimate range with min/max indie prices
-        net_min = _DEFAULT_PRICE_MIN * owners * (1 - _STEAM_CUT)
-        net_max = _DEFAULT_PRICE_MAX * owners * (1 - _STEAM_CUT)
+
+        net_min = p * low_owners * (1 - _STEAM_CUT)
+        net_avg = p * owners * (1 - _STEAM_CUT)
+        net_max = p * high_owners * (1 - _STEAM_CUT)
+
         if net_min >= _STEAM_FEE:
             flag = "recouped"
             label_it = "Rientrato ✅"
@@ -154,10 +150,45 @@ def _compute_revenue_flag(
             flag = "not_recouped"
             label_it = "Non rientrato ❌"
             label_en = "Not recouped ❌"
-        return {"flag": flag, "label_it": label_it, "label_en": label_en,
-                "estimated_revenue_min": round(net_min, 2), "estimated_revenue_max": round(net_max, 2),
-                "estimated_owners": est,
-                "details": f"Prezzo sconosciuto, stimato ${_DEFAULT_PRICE_MIN}-${_DEFAULT_PRICE_MAX} × {owners} owners (media 3 stime)"}
+
+        return {
+            "flag": flag,
+            "label_it": label_it,
+            "label_en": label_en,
+            "estimated_revenue_min": round(net_min, 2),
+            "estimated_revenue_max": round(net_max, 2),
+            "estimated_revenue_avg": round(net_avg, 2),
+            "estimated_owners": est,
+            "details": f"${p:.2f} × {owners} owners (media 3 stime: {low_owners}–{high_owners}) × 0.70 = ${net_avg:.0f} net",
+        }
+    else:
+        # Price unknown — estimate range with min/max indie prices
+        net_min = _DEFAULT_PRICE_MIN * low_owners * (1 - _STEAM_CUT)
+        net_max = _DEFAULT_PRICE_MAX * high_owners * (1 - _STEAM_CUT)
+        net_avg = round((net_min + net_max) / 2, 2)
+        if net_min >= _STEAM_FEE:
+            flag = "recouped"
+            label_it = "Rientrato ✅"
+            label_en = "Recouped ✅"
+        elif net_max >= _STEAM_FEE:
+            flag = "likely_recouped"
+            label_it = "Prob. rientrato 🟡"
+            label_en = "Likely recouped 🟡"
+        else:
+            flag = "not_recouped"
+            label_it = "Non rientrato ❌"
+            label_en = "Not recouped ❌"
+        return {
+            "flag": flag,
+            "label_it": label_it,
+            "label_en": label_en,
+            "estimated_revenue_min": round(net_min, 2),
+            "estimated_revenue_max": round(net_max, 2),
+            "estimated_revenue_avg": net_avg,
+            "estimated_owners": est,
+            "details": f"Prezzo sconosciuto, stimato ${_DEFAULT_PRICE_MIN}-${_DEFAULT_PRICE_MAX} × {owners} owners (media 3 stime: {low_owners}–{high_owners})",
+        }
+
 
 
 # --- Helpers ----------------------------------------------------------------

@@ -60,6 +60,9 @@ class GameRow:
     latest_players: Optional[int] = None
     # Crescita recensioni sul periodo tracciato (delta primo->ultimo snapshot).
     review_growth: Optional[int] = None
+    price: Optional[float] = None
+    is_free: bool = False
+
 
 
 @dataclass
@@ -262,7 +265,10 @@ class GameRepository:
             latest_reviews=self._latest_metric(snaps, "total_reviews"),
             latest_players=self._latest_metric(snaps, "current_players"),
             review_growth=self._review_growth(snaps),
+            price=game.price,
+            is_free=game.is_free,
         )
+
 
     # --- Query pubbliche: liste e dashboard -------------------------------
 
