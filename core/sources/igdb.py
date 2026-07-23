@@ -1,4 +1,4 @@
-"""Client IGDB/Twitch - dettaglio giochi via API IGDB v4.
+"""Client IGDB/Twitch — dettaglio giochi via API IGDB v4.
 
 Autenticazione: Twitch OAuth ``client_credentials`` flow.
 Legge ``TWITCH_CLIENT_ID`` e ``TWITCH_CLIENT_SECRET`` dall'ambiente.
@@ -92,7 +92,7 @@ def _get_token(force_refresh: bool = False) -> Optional[str]:
     client_id, client_secret = _get_credentials()
     if not client_id or not client_secret:
         logger.warning(
-            "TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET mancanti - "
+            "TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET mancanti — "
             "sorgente IGDB non disponibile."
         )
         return None

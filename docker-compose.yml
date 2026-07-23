@@ -1,0 +1,96 @@
+# docker-compose.yml — GamesTracker service composition
+#
+# Required environment variables (copy config/.env.example → config/.env):
+#
+#   DB_URL=sqlite:////app/data/gamestracker.db
+#   APP_LANG=en
+#   QUALITY_SCORE_THRESHOLD=40.0
+#   DISCOVERY_INTERVAL_HOURS=6
+#   HTTP_USER_AGENT=GamesTracker/0.1 (+https://github.com/gamestracker)
+#   STEAM_WEB_API_KEY=
+#   YOUTUBE_API_KEY=
+#   REDDIT_CLIENT_ID=
+#   REDDIT_CLIENT_SECRET=
+#   REDDIT_USER_AGENT=GamesTracker/0.1
+#   DISCORD_WEBHOOK_URL=
+#   TELEGRAM_BOT_TOKEN=
+#   TELEGRAM_CHAT_ID=
+#   NOTIFICATIONS_ENABLED=false
+
+version: "3.9"
+
+services:
+
+  # --------------------------------------------------------------------------
+  # collector — background data-collection service
+  # --------------------------------------------------------------------------
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: gamestracker:latest
+    container_name: gamestracker_collector
+    command: ["python", "run_collector.py"]
+    restart: unless-stopped
+    env_file:
+      - config/.env
+    volumes:
+      - gamestracker_data:/app/data
+    networks:
+      - gamestracker_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import core.config; core.config.get_settings()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # --------------------------------------------------------------------------
+  # web — FastAPI dashboard / REST API
+  # --------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: gamestracker:latest
+    container_name: gamestracker_web
+    command: ["python", "run_web.py"]
+    restart: unless-stopped
+    env_file:
+      - config/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - gamestracker_data:/app/data
+    networks:
+      - gamestracker_net
+    depends_on:
+      collector:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# --------------------------------------------------------------------------
+# Volumes
+# --------------------------------------------------------------------------
+volumes:
+  gamestracker_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+
+# --------------------------------------------------------------------------
+# Networks
+# --------------------------------------------------------------------------
+networks:
+  gamestracker_net:
+    driver: bridge
+    name: gamestracker_net

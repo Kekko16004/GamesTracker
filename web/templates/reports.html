@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Reports — GamesTracker{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__h1">Reports</h1>
+    <p class="page-header__sub">{{ reports | length }} analysis report{% if reports | length != 1 %}s{% endif %} generated</p>
+  </div>
+</div>
+
+{% if reports %}
+<div class="reports-list">
+  {% for rep in reports %}
+  <article class="report-card">
+    <div class="report-card__header">
+      <div class="report-card__meta">
+        <span class="badge badge--lang">{{ rep.lang | upper }}</span>
+        {% if rep.game_title %}
+        <span class="report-card__game">
+          {% if rep.game_id %}
+          <a href="/game/{{ rep.game_id }}" class="text-link">{{ rep.game_title }}</a>
+          {% else %}
+          {{ rep.game_title }}
+          {% endif %}
+        </span>
+        {% endif %}
+        {% if rep.genre %}
+        <span class="tag">{{ rep.genre }}</span>
+        {% endif %}
+      </div>
+      <span class="report-card__date mono muted">{{ rep.generated_at[:10] if rep.generated_at else '—' }}</span>
+    </div>
+    <p class="report-card__preview">{{ rep.summary_preview }}</p>
+    <div class="report-card__footer">
+      <a href="/api/reports/{{ rep.id }}" target="_blank" rel="noopener noreferrer" class="btn btn--sm btn--ghost">
+        Full report (JSON) ↗
+      </a>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state__icon">◧</div>
+  <h3 class="empty-state__title">No reports yet</h3>
+  <p class="empty-state__sub">Generate reports through the desktop analysis tools and they will appear here.</p>
+</div>
+{% endif %}
+{% endblock %}

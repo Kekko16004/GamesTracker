@@ -1,4 +1,4 @@
-"""X/Twitter async scraper - RSS bridge via Nitter + public page fallback.
+"""X/Twitter async scraper — RSS bridge via Nitter + public page fallback.
 
 Strategy:
 1. **Nitter RSS feed** (``https://<nitter_instance>/search/rss?q=<query>``):
@@ -35,17 +35,17 @@ logger = logging.getLogger(__name__)
 
 PLATFORM = "twitter"
 
-# Default Nitter instance - configurable via NITTER_INSTANCE env var.
+# Default Nitter instance — configurable via NITTER_INSTANCE env var.
 DEFAULT_NITTER_INSTANCE = "nitter.privacydev.net"
 
 # RSS namespaces used by Nitter / Atom.
 _RSS_ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 
 # Patterns to extract engagement numbers from Nitter's RSS description HTML.
-# Example: "RT 12 . likes 45 . replies 3"
+# Example: "♻ 12 · ❤️ 45 · 💬 3"  or plain text "12 retweets, 45 likes"
 _RETWEET_RE = re.compile(r"(?:♻|RT)\s*[:\-]?\s*(\d+)", re.IGNORECASE)
 _LIKE_RE = re.compile(r"(?:❤|♥|like[s]?)\s*[:\-]?\s*(\d+)", re.IGNORECASE)
-_REPLY_RE = re.compile(r"(?:\U0001f4ac|repl(?:y|ies)?)\s*[:\-]?\s*(\d+)", re.IGNORECASE)
+_REPLY_RE = re.compile(r"(?:💬|repl(?:y|ies)?)\s*[:\-]?\s*(\d+)", re.IGNORECASE)
 
 # Nitter HTML search page patterns.
 _TWEET_LINK_RE = re.compile(

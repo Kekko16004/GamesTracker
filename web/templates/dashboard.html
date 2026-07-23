@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — GamesTracker{% endblock %}
+
+{% block content %}
+<!-- ======== HEADER ======== -->
+<div class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__h1">Dashboard</h1>
+    <p class="page-header__sub">Tracking {{ stats.total_games }} games · {{ stats.visible_games }} visible · {{ stats.recent_releases }} released in last 30 days</p>
+  </div>
+</div>
+
+<!-- ======== STATS STRIP ======== -->
+<div class="stats-strip">
+  <div class="stat-card">
+    <span class="stat-card__value mono">{{ stats.total_games }}</span>
+    <span class="stat-card__label">Total Games</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-card__value mono">{{ stats.visible_games }}</span>
+    <span class="stat-card__label">Visible</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-card__value mono">{{ stats.discarded_games }}</span>
+    <span class="stat-card__label">Discarded</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-card__value mono">{{ stats.recent_releases }}</span>
+    <span class="stat-card__label">Recent (30d)</span>
+  </div>
+</div>
+
+<!-- ======== FILTERS ======== -->
+<form
+  class="filter-bar"
+  hx-get="/"
+  hx-target="#games-grid"
+  hx-trigger="change, search, input delay:400ms"
+  hx-push-url="true"
+  hx-select="#games-grid"
+>
+  <!-- Search -->
+  <div class="filter-bar__group filter-bar__group--wide">
+    <label class="filter-bar__label" for="search">Search</label>
+    <input
+      id="search"
+      name="search"
+      type="search"
+      class="filter-bar__input"
+      placeholder="Game title…"
+      value="{{ current_search }}"
+    />
+  </div>
+
+  <!-- Platform -->
+  <div class="filter-bar__group">
+    <label class="filter-bar__label" for="platform">Platform</label>
+    <select id="platform" name="platform" class="filter-bar__select">
+      <option value="">All</option>
+      <option value="steam" {% if current_platform == 'steam' %}selected{% endif %}>Steam</option>
+      <option value="itch" {% if current_platform == 'itch' %}selected{% endif %}>itch.io</option>
+    </select>
+  </div>
+
+  <!-- Genre -->
+  <div class="filter-bar__group">
+    <label class="filter-bar__label" for="genre">Genre</label>
+    <select id="genre" name="genre" class="filter-bar__select">
+      <option value="">All genres</option>
+      {% for g in genres %}
+      <option value="{{ g }}" {% if current_genre == g %}selected{% endif %}>{{ g }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <!-- Min score -->
+  <div class="filter-bar__group" x-data="{ score: {{ current_min_score }} }">
+    <label class="filter-bar__label" for="min_score">
+      Min score <span class="mono" x-text="score"></span>
+    </label>
+    <input
+      id="min_score"
+      name="min_score"
+      type="range"
+      min="0" max="100" step="5"
+      class="filter-bar__range"
+      x-model="score"
+      value="{{ current_min_score }}"
+    />
+  </div>
+
+  <!-- Sort -->
+  <div class="filter-bar__group">
+    <label class="filter-bar__label" for="sort_by">Sort by</label>
+    <select id="sort_by" name="sort_by" class="filter-bar__select">
+      <option value="quality_score" {% if current_sort == 'quality_score' %}selected{% endif %}>Quality Score</option>
+      <option value="growth"        {% if current_sort == 'growth'        %}selected{% endif %}>Growth</option>
+      <option value="recency"       {% if current_sort == 'recency'       %}selected{% endif %}>Recent</option>
+      <option value="title"         {% if current_sort == 'title'         %}selected{% endif %}>Title A–Z</option>
+    </select>
+  </div>
+</form>
+
+<!-- ======== RESULTS COUNT ======== -->
+<p class="results-count">
+  Showing <span class="mono">{{ games | length }}</span> game{% if games | length != 1 %}s{% endif %}
+</p>
+
+<!-- ======== GAME CARDS GRID ======== -->
+<div id="games-grid" class="games-grid">
+  {% if games %}
+    {% for game in games %}
+      {% include "partials/game_card.html" %}
+    {% endfor %}
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state__icon">◈</div>
+    <h3 class="empty-state__title">No games found</h3>
+    <p class="empty-state__sub">Try adjusting your filters or adding games through the desktop app.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

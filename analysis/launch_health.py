@@ -1,18 +1,24 @@
-"""Launch Health - score composito 0-100 pre/post lancio.
+"""Launch Health — score composito 0-100 pre/post lancio.
 
 Combina cinque segnali per valutare la "salute" del lancio di un gioco:
 
-    a) Social velocity       - menzioni/giorno e tendenza (crescente/stabile/calante)
-    b) Review sentiment      - trend miglioramento/peggioramento delle review
-    c) Player trajectory     - tasso di crescita del player count
-    d) Marketing coverage    - demo, trailer, social post PRE-lancio
-    e) Quality score         - score esistente del sistema (quality_score.py)
+    a) Social velocity       — menzioni/giorno e tendenza (crescente/stabile/calante)
+    b) Review sentiment      — trend miglioramento/peggioramento delle review
+    c) Player trajectory     — tasso di crescita del player count
+    d) Marketing coverage    — demo, trailer, social post PRE-lancio
+    e) Quality score         — score esistente del sistema (quality_score.py)
 
 Ciascun segnale contribuisce con un peso configurabile. I segnali mancanti
-sono trattati come neutri (0.5), mai come zero.
+sono trattati come neutri (0.5), mai come zero — stesso principio di
+quality_score.py.
 
 Funzione principale:
     ``compute_launch_health(game_id, session) -> LaunchHealth``
+
+Design:
+- Funzione pura ``_compute_health(signals) -> (score, breakdown)`` testabile.
+- Accesso al DB isolato in ``_collect_signals(game_id, session) -> dict``.
+- ``LaunchHealth`` dataclass serializzabile per la GUI.
 
 Pesi di default (configurabili):
     social_velocity: 0.25
@@ -62,7 +68,10 @@ class SignalBreakdown:
 
 @dataclass
 class LaunchHealth:
-    """Score di salute del lancio composito 0-100."""
+    """Score di salute del lancio composito 0-100.
+
+    Ogni segnale ha il proprio ``SignalBreakdown`` per il drill-down nella GUI.
+    """
 
     game_id: int
     score: float                            # 0-100
@@ -102,7 +111,7 @@ def _clamp01(x: float) -> float:
 
 
 def _log_norm(value: Optional[float], ref: float) -> float:
-    """Normalizza su [0,1] con scala logaritmica."""
+    """Normalizza su [0,1] con scala logaritmica (stessa logica di quality_score)."""
     if value is None or value <= 0 or ref <= 0:
         return 0.0
     return _clamp01(math.log1p(value) / math.log1p(ref))
@@ -131,7 +140,12 @@ def _score_social_velocity(
     window_days: int = 30,
     ref_mentions_per_day: float = 5.0,
 ) -> SignalBreakdown:
-    """Velocita' delle menzioni social (menzioni/giorno nell'ultima finestra)."""
+    """Velocita' delle menzioni social (menzioni/giorno nell'ultima finestra).
+
+    Considera i post nell'arco di ``window_days`` giorni prima della data di
+    riferimento (lancio o oggi se non ancora uscito). Calcola anche il trend
+    confrontando la prima meta' con la seconda meta' della finestra.
+    """
     now = datetime.now(timezone.utc)
     ref = release_date or now
     if ref.tzinfo is None:
@@ -145,6 +159,7 @@ def _score_social_velocity(
     n = len(recent_posts)
     mentions_per_day = n / window_days if window_days > 0 else 0.0
 
+    # Trend: confronta prima vs seconda meta' della finestra.
     mid = window_start + timedelta(days=window_days / 2)
     first_half = [p for p in recent_posts if _as_utc(p["posted_at"]) < mid]
     second_half = [p for p in recent_posts if _as_utc(p["posted_at"]) >= mid]
@@ -157,6 +172,7 @@ def _score_social_velocity(
         trend_direction = "declining"
 
     normalized = _log_norm(mentions_per_day, ref_mentions_per_day)
+    # Bonus/malus per trend.
     if trend_direction == "increasing":
         normalized = _clamp01(normalized * 1.15)
     elif trend_direction == "declining" and normalized > 0:
@@ -166,7 +182,7 @@ def _score_social_velocity(
         name="social_velocity",
         raw_value=round(mentions_per_day, 3),
         normalized=normalized,
-        weight=0.0,
+        weight=0.0,  # viene impostato dal chiamante
         contribution=0.0,
         available=len(posts) > 0,
         detail={
@@ -184,7 +200,11 @@ def _score_review_sentiment(
     *,
     recent_days: int = 60,
 ) -> SignalBreakdown:
-    """Trend del sentiment delle review."""
+    """Trend del sentiment delle review (miglioramento vs peggioramento).
+
+    Confronta la % di positive nell'ultimo snapshot vs nello snapshot di
+    ``recent_days`` fa (o il piu' vecchio disponibile).
+    """
     if not snapshots:
         return SignalBreakdown(
             name="review_sentiment",
@@ -213,12 +233,15 @@ def _score_review_sentiment(
     if pct_latest is not None and pct_old is not None:
         trend_delta = pct_latest - pct_old
 
+    # Normalizzazione: % positive centrata su 0.7 (70% positive = neutro).
     if pct_latest is None:
         normalized = 0.5
         available = False
     else:
+        # 0-1 basato sulla % positive, con bonus/malus trend.
         base = _clamp01(pct_latest)
         if trend_delta is not None:
+            # Trend positivo/negativo: +/- fino a 0.1 di bonus/malus.
             base = _clamp01(base + trend_delta * 0.5)
         normalized = base
         available = True
@@ -244,7 +267,11 @@ def _score_player_trajectory(
     *,
     ref_growth_rate: float = 0.20,
 ) -> SignalBreakdown:
-    """Traiettoria del player count (tasso di crescita relativo)."""
+    """Traiettoria del player count (tasso di crescita relativo).
+
+    Usa il tasso di crescita tra il primo e l'ultimo snapshot con player
+    count disponibile. 0 = piatto; positivo = crescita; negativo = declino.
+    """
     points = [
         (_as_utc(s["captured_at"]), s["current_players"])
         for s in snapshots
@@ -271,6 +298,7 @@ def _score_player_trajectory(
     else:
         growth_rate = 0.0
 
+    # Centra su 0.5: crescita nulla = neutro, crescita > ref_growth_rate = 1.
     normalized = _clamp01(0.5 + growth_rate / (ref_growth_rate * 2.0))
 
     return SignalBreakdown(
@@ -294,7 +322,14 @@ def _score_marketing_coverage(
     posts: list[dict[str, Any]],
     release_date: Optional[datetime],
 ) -> SignalBreakdown:
-    """Copertura marketing pre-lancio."""
+    """Copertura marketing pre-lancio.
+
+    Segnali:
+    - Demo disponibile          (peso 1)
+    - Trailer presente          (peso 1)
+    - Post social pre-lancio    (peso 1 se >= 3 post prima della release)
+    - Immagine header presente  (peso 0.5)
+    """
     has_demo = bool(game_data.get("has_demo"))
     has_trailer = bool(game_data.get("has_trailer"))
     has_header = bool(game_data.get("header_image"))
@@ -332,7 +367,7 @@ def _score_marketing_coverage(
 
 
 def _score_quality(quality_score: Optional[float]) -> SignalBreakdown:
-    """Contributo del quality score esistente."""
+    """Contributo del quality score esistente (normalizzato su [0,1])."""
     if quality_score is None:
         return SignalBreakdown(
             name="quality_score",
@@ -364,7 +399,10 @@ def _compute_health(
     signals: dict[str, SignalBreakdown],
     weights: dict[str, float],
 ) -> tuple[float, list[SignalBreakdown]]:
-    """Calcola lo score composito da un dict di segnali e pesi (FUNZIONE PURA)."""
+    """Calcola lo score composito da un dict di segnali e pesi (FUNZIONE PURA).
+
+    Ritorna ``(score_0_100, lista_signal_breakdown_con_contribution)``.
+    """
     total_w = sum(weights.values()) or 1.0
     score_raw = 0.0
     out_signals: list[SignalBreakdown] = []
@@ -410,7 +448,10 @@ def _pct_positive(snap: dict[str, Any]) -> Optional[float]:
 
 
 def _collect_signals(game_id: int, session) -> dict[str, Any]:
-    """Raccoglie i dati necessari dal DB per calcolare il launch health."""
+    """Raccoglie i dati necessari dal DB per calcolare il launch health.
+
+    Ritorna un dict con tutti i dati grezzi (non calcolati).
+    """
     from sqlalchemy import select, desc
 
     from core.models import Game, GameSnapshot, SocialPost
@@ -487,7 +528,23 @@ def compute_launch_health(
     session,
     weights: Optional[dict[str, float]] = None,
 ) -> LaunchHealth:
-    """Calcola il launch health score composito per un gioco."""
+    """Calcola il launch health score composito per un gioco.
+
+    Non solleva: in caso di errore DB ritorna un LaunchHealth con score 0.0.
+
+    Parametri
+    ---------
+    game_id:
+        ID del gioco nel DB.
+    session:
+        Sessione SQLAlchemy attiva.
+    weights:
+        Pesi custom (default: ``DEFAULT_WEIGHTS``).
+
+    Ritorna
+    -------
+    ``LaunchHealth`` dataclass con score 0-100 e breakdown per segnale.
+    """
     w = dict(weights or DEFAULT_WEIGHTS)
 
     try:
@@ -510,6 +567,7 @@ def compute_launch_health(
     snap_dicts = raw["snapshots"]
     post_dicts = raw["posts"]
 
+    # Calcola i singoli segnali.
     signals: dict[str, SignalBreakdown] = {
         "social_velocity": _score_social_velocity(post_dicts, release_date),
         "review_sentiment": _score_review_sentiment(snap_dicts),

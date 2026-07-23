@@ -104,3 +104,66 @@ tests/test_gui_i18n.py             i18n IT/EN + switch.
 tests/test_gui_manual_import.py    save_manual_post + smoke dialog (skip se manca PyQt6).
 tests/test_gui_widgets.py          Widget GUI (skip se manca PyQt6).
 ```
+
+
+## web/ — dashboard web (FastAPI + HTMX, sola lettura dal DB)
+
+```
+web/__init__.py         Package marker.
+web/app.py              FastAPI application factory: router registration, middleware, static files.
+web/dependencies.py     get_db() dependency: inietta session SQLAlchemy nei router.
+web/routers/games.py    GET /games — lista giochi ordinata per quality score, filtri genere/piattaforma.
+web/routers/trends.py   GET /trends — trend aggregati per genere.
+web/routers/health.py   GET /health — health check (game_count dal DB).
+web/templates/          Jinja2 HTML templates (base.html, dashboard, game_detail, trends).
+web/static/css/         Stili (Tailwind o custom CSS).
+web/static/js/          HTMX + Chart.js init scripts.
+```
+
+## Nuove sorgenti in core/sources/ (in progress)
+
+```
+core/sources/rawg.py         RAWG game database: dettaglio gioco, rating, generi, screenshots.
+core/sources/igdb.py         IGDB (Twitch): metadati autorevoli, calendario uscite.
+core/sources/howlongtobeat.py  HowLongToBeat: playtime per categoria di completamento.
+core/sources/opencritic.py   OpenCritic: aggregazione recensioni critici + score.
+```
+
+## Nuove sorgenti social in core/sources/social/ (in progress)
+
+```
+core/sources/social/x_twitter.py       X/Twitter scraper via Nitter (no-auth).
+core/sources/social/reddit_noauth.py   Reddit public JSON fallback (/search.json senza OAuth).
+```
+
+## analysis/ — nuovi moduli AI e market intelligence (in progress)
+
+```
+analysis/sentiment.py    AI sentiment analysis su reviews e post social (transformer locale).
+analysis/market_gap.py   Market gap finder: generi sotto-serviti con alto demand e basso supply.
+analysis/launch_health.py  Launch health score: indicatore composito giorno-1 vs. breakout storici.
+```
+
+## Infrastructure (in progress)
+
+```
+Dockerfile               Multi-stage build: builder / collector / web.
+docker-compose.yml       Full stack locale: collector + web + volume SQLite.
+.dockerignore            Esclude .env, data/, venv/, __pycache__, .git.
+.github/workflows/ci.yml GitHub Actions: ruff lint + pytest su ogni push/PR su main.
+```
+
+## Nuovi test (da aggiungere)
+
+```
+tests/test_rawg_source.py          RAWG parsing + degradazione senza key.
+tests/test_igdb_source.py          IGDB parsing + auth Twitch.
+tests/test_howlongtobeat_source.py HLtB parsing.
+tests/test_opencritic_source.py    OpenCritic parsing.
+tests/test_social_xtwitter.py      X/Nitter scraper (mock HTML).
+tests/test_social_reddit_noauth.py Reddit public JSON fallback.
+tests/test_analysis_sentiment.py   Sentiment pipeline (mock model).
+tests/test_analysis_market_gap.py  Market gap con dataset sintetico.
+tests/test_analysis_launch_health.py Launch health score.
+tests/test_web_routes.py           FastAPI routes con TestClient (DB in-memory).
+```

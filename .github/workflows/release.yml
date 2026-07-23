@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for changelog generation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Get tag name
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Build source zip
+        run: |
+          ZIP_NAME="gamestracker-${{ steps.tag.outputs.tag }}-source.zip"
+          zip -r "${ZIP_NAME}" . \
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "venv/*" \
+            --exclude "__pycache__/*" \
+            --exclude "*.pyc" \
+            --exclude "data/*" \
+            --exclude "config/.env" \
+            --exclude ".dockerignore" \
+            --exclude "*.egg-info/*"
+          echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "GamesTracker ${{ steps.tag.outputs.tag }}"
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
+          files: |
+            ${{ env.ZIP_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

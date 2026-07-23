@@ -1,0 +1,322 @@
+"""Web-specific data access layer for GamesTracker dashboard.
+
+Reuses the GameRepository from gui/data_access.py but returns plain
+dicts and lists (JSON-serializable) instead of dataclasses, making it
+suitable for FastAPI JSON responses and Jinja2 template context.
+
+No PyQt6 dependency — safe to import in any environment.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Optional
+
+from gui.data_access import GameRepository
+
+
+# --- Singleton repository -----------------------------------------------
+
+_repo: GameRepository | None = None
+
+
+def _get_repo() -> GameRepository:
+    """Returns the shared GameRepository, creating it on first call."""
+    global _repo
+    if _repo is None:
+        _repo = GameRepository()
+    return _repo
+
+
+# --- Serialization helpers -----------------------------------------------
+
+
+def _fmt_dt(dt: Optional[datetime]) -> Optional[str]:
+    """ISO-8601 string for a datetime, or None."""
+    if dt is None:
+        return None
+    return dt.isoformat()
+
+
+# --- Public functions -----------------------------------------------------
+
+
+def get_games_list(
+    *,
+    platform: Optional[str] = None,
+    min_score: float = 0.0,
+    sort_by: str = "quality_score",
+    genre: Optional[str] = None,
+    search: Optional[str] = None,
+    include_discarded: bool = False,
+    limit: Optional[int] = None,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Return a filtered, sorted list of games as JSON-serializable dicts.
+
+    Parameters
+    ----------
+    platform:
+        Filter to 'steam' or 'itch'. None means all.
+    min_score:
+        Minimum quality score threshold (0.0 = include all).
+    sort_by:
+        One of 'quality_score', 'growth', 'recency', 'title'.
+    genre:
+        Filter to games containing this genre string.
+    search:
+        Case-insensitive title substring filter applied after DB query.
+    include_discarded:
+        Whether to include games marked as discarded.
+    limit:
+        Maximum number of results (None = no limit).
+    offset:
+        Number of rows to skip (for pagination).
+    """
+    repo = _get_repo()
+    rows = repo.list_games(
+        min_quality_score=min_score,
+        platform=platform,
+        genre=genre,
+        include_discarded=include_discarded,
+        limit=None,   # we sort + slice in Python for flexible sort_by
+        offset=0,
+    )
+
+    # Apply search filter.
+    if search:
+        needle = search.lower()
+        rows = [r for r in rows if needle in r.title.lower()]
+
+    # Apply custom sort.
+    if sort_by == "growth":
+        rows.sort(key=lambda r: r.review_growth or 0, reverse=True)
+    elif sort_by == "recency":
+        # Sort by release_date descending; games without date go last.
+        rows.sort(
+            key=lambda r: (r.release_date is None, r.release_date or ""),
+            reverse=True,
+        )
+        # Fix: None pushed to end when we flip reverse on a bool
+        rows.sort(key=lambda r: r.release_date is None)
+    elif sort_by == "title":
+        rows.sort(key=lambda r: r.title.lower())
+    else:
+        # Default: quality_score descending, None last.
+        rows.sort(key=lambda r: (r.quality_score is None, -(r.quality_score or 0)))
+
+    # Slice for pagination.
+    if offset:
+        rows = rows[offset:]
+    if limit is not None:
+        rows = rows[:limit]
+
+    return [
+        {
+            "id": r.id,
+            "platform": r.platform,
+            "external_id": r.external_id,
+            "title": r.title,
+            "developer": r.developer,
+            "genres": r.genres,
+            "release_date": r.release_date,
+            "quality_score": r.quality_score,
+            "discarded": r.discarded,
+            "store_url": r.store_url,
+            "header_image": r.header_image,
+            "latest_reviews": r.latest_reviews,
+            "latest_players": r.latest_players,
+            "review_growth": r.review_growth,
+        }
+        for r in rows
+    ]
+
+
+def get_game_detail(game_id: int) -> Optional[dict[str, Any]]:
+    """Return full game detail as a JSON-serializable dict, or None."""
+    repo = _get_repo()
+    detail = repo.get_game_detail(game_id)
+    if detail is None:
+        return None
+
+    g = detail.game
+    return {
+        "id": g.id,
+        "platform": g.platform,
+        "external_id": g.external_id,
+        "title": g.title,
+        "developer": g.developer,
+        "publisher": detail.publisher,
+        "genres": g.genres,
+        "tags": detail.tags,
+        "release_date": g.release_date,
+        "has_demo": detail.has_demo,
+        "demo_release_date": detail.demo_release_date,
+        "price": detail.price,
+        "is_free": detail.is_free,
+        "store_url": g.store_url,
+        "header_image": g.header_image,
+        "quality_score": g.quality_score,
+        "discarded": g.discarded,
+        "latest_reviews": g.latest_reviews,
+        "latest_players": g.latest_players,
+        "review_growth": g.review_growth,
+        "snapshots": [
+            {
+                "captured_at": _fmt_dt(s.captured_at),
+                "snapshot_type": s.snapshot_type,
+                "total_reviews": s.total_reviews,
+                "total_positive": s.total_positive,
+                "total_negative": s.total_negative,
+                "current_players": s.current_players,
+            }
+            for s in detail.snapshots
+        ],
+        "timeline": [
+            {
+                "kind": e.kind,
+                "when": _fmt_dt(e.when),
+                "label": e.label,
+                "platform": e.platform,
+                "url": e.url,
+            }
+            for e in detail.timeline
+        ],
+        "social_accounts": [
+            {
+                "id": a.id,
+                "platform": a.platform,
+                "handle": a.handle,
+                "url": a.url,
+                "discovered_via": a.discovered_via,
+                "latest_followers": a.latest_followers,
+            }
+            for a in detail.accounts
+        ],
+        "social_posts": [
+            {
+                "id": p.id,
+                "platform": p.platform,
+                "posted_at": _fmt_dt(p.posted_at),
+                "title": p.title,
+                "subreddit": p.subreddit,
+                "url": p.url,
+                "views": p.views,
+                "likes": p.likes,
+                "comments": p.comments,
+                "shares": p.shares,
+            }
+            for p in detail.posts
+        ],
+    }
+
+
+def get_game_snapshots(game_id: int) -> list[dict[str, Any]]:
+    """Return snapshot time series for a game, or [] if game not found."""
+    detail = get_game_detail(game_id)
+    if detail is None:
+        return []
+    return detail["snapshots"]
+
+
+def get_game_social(game_id: int) -> dict[str, Any]:
+    """Return social accounts and posts for a game."""
+    detail = get_game_detail(game_id)
+    if detail is None:
+        return {"accounts": [], "posts": []}
+    return {
+        "accounts": detail["social_accounts"],
+        "posts": detail["social_posts"],
+    }
+
+
+def get_trend_data(*, min_score: float = 0.0) -> dict[str, Any]:
+    """Return genre trend aggregations and top-growing games."""
+    repo = _get_repo()
+    trends = repo.genre_trends(min_quality_score=min_score)
+    top_growth = repo.top_by_growth(min_quality_score=min_score, limit=10)
+    genre_dist = repo.genre_distribution(min_quality_score=min_score)
+    stats = repo.dashboard_stats(min_quality_score=min_score)
+
+    return {
+        "genre_trends": [
+            {
+                "genre": t.genre,
+                "game_count": t.game_count,
+                "avg_quality_score": t.avg_quality_score,
+                "total_review_growth": t.total_review_growth,
+            }
+            for t in trends
+        ],
+        "top_growing": [
+            {
+                "id": r.id,
+                "title": r.title,
+                "platform": r.platform,
+                "quality_score": r.quality_score,
+                "review_growth": r.review_growth,
+                "genres": r.genres,
+            }
+            for r in top_growth
+        ],
+        "genre_distribution": genre_dist,
+        "stats": {
+            "total_games": stats.total_games,
+            "visible_games": stats.visible_games,
+            "discarded_games": stats.discarded_games,
+            "recent_releases": stats.recent_releases,
+        },
+    }
+
+
+def get_reports_list() -> list[dict[str, Any]]:
+    """Return all analysis reports (newest first)."""
+    repo = _get_repo()
+    rows = repo.list_reports()
+    return [
+        {
+            "id": r.id,
+            "game_id": r.game_id,
+            "game_title": r.game_title,
+            "genre": r.genre,
+            "lang": r.lang,
+            "generated_at": _fmt_dt(r.generated_at),
+            "summary_preview": r.summary_preview,
+        }
+        for r in rows
+    ]
+
+
+def get_report_detail(report_id: int) -> Optional[dict[str, Any]]:
+    """Return a single report with full summary and data payload."""
+    repo = _get_repo()
+    rep = repo.get_report(report_id)
+    if rep is None:
+        return None
+    return {
+        "id": rep.id,
+        "game_id": rep.game_id,
+        "game_title": rep.game_title,
+        "genre": rep.genre,
+        "lang": rep.lang,
+        "generated_at": _fmt_dt(rep.generated_at),
+        "summary": rep.summary,
+        "data": rep.data,
+    }
+
+
+def get_dashboard_stats(*, min_score: float = 0.0) -> dict[str, Any]:
+    """Return summary stats for the dashboard header."""
+    repo = _get_repo()
+    stats = repo.dashboard_stats(min_quality_score=min_score)
+    return {
+        "total_games": stats.total_games,
+        "visible_games": stats.visible_games,
+        "discarded_games": stats.discarded_games,
+        "recent_releases": stats.recent_releases,
+    }
+
+
+def get_available_genres() -> list[str]:
+    """Return sorted list of all genres present in the database."""
+    return _get_repo().available_genres()

@@ -1,4 +1,4 @@
-"""TikTok async scraper - oembed API + public web scraping (no auth).
+"""TikTok async scraper — oembed API + public web scraping (no auth).
 
 Strategy:
 1. **oembed API** (``https://www.tiktok.com/oembed?url=...``): retrieves
@@ -9,7 +9,7 @@ Strategy:
    of the game title.
 
 No login, cookies, or API keys required.
-Rate limit: 30 requests/minute (conservative - TikTok is aggressive on rate
+Rate limit: 30 requests/minute (conservative — TikTok is aggressive on rate
 limiting public endpoints).
 
 Graceful degradation: every method is wrapped so errors only produce a log
@@ -42,7 +42,7 @@ _NEXT_DATA_RE = re.compile(
     r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.DOTALL
 )
 _SIGI_STATE_RE = re.compile(
-    r'<script[^>]*>\s*window\[(?:"SIGI_STATE"|\x27SIGI_STATE\x27)\]\s*=\s*(\{.*?\});\s*</script>',
+    r'<script[^>]*>\s*window\[(?:"SIGI_STATE"|\'SIGI_STATE\')\]\s*=\s*(\{.*?\});\s*</script>',
     re.DOTALL,
 )
 

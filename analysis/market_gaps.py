@@ -1,4 +1,4 @@
-"""Market gap finder - combinazioni genere/meccanica sottoservite.
+"""Market gap finder — combinazioni genere/meccanica sottoservite.
 
 Analizza il corpus di giochi raccolti per individuare dove c'e' alta
 domanda (player count + social engagement) ma bassa offerta (pochi titoli)

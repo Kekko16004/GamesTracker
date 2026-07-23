@@ -1,4 +1,4 @@
-"""Instagram async scraper - oembed API + public page scraping (no auth).
+"""Instagram async scraper — oembed API + public page scraping (no auth).
 
 Strategy:
 1. **oembed API** (``https://graph.facebook.com/v18.0/instagram_oembed?url=...``):
@@ -9,7 +9,7 @@ Strategy:
    ``__additionalDataLoaded`` JSON embedded in the profile HTML.
 3. **Hashtag exploration**: ``/explore/tags/<hashtag>/`` public pages.
 4. **Graceful degradation**: if any request is blocked (401/403/429), logs a
-   warning and falls back to the manual import hint - never crashes.
+   warning and falls back to the manual import hint — never crashes.
 
 Rate limit: 20 requests/minute (Instagram is aggressive; stay conservative).
 """
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 PLATFORM = "instagram"
 
-# oembed endpoint - public, no token needed for the basic (non-embeds) variant.
+# oembed endpoint — public, no token needed for the basic (non-embeds) variant.
 _OEMBED_URL = "https://api.instagram.com/oembed"
 # Graph API oembed (needs app token for full response).
 _GRAPH_OEMBED_URL = "https://graph.facebook.com/v18.0/instagram_oembed"
@@ -298,7 +298,7 @@ class InstagramScraper(BaseScraper):
 
         if response.status_code in _BLOCKED_STATUSES:
             logger.warning(
-                "[instagram] Blocked (HTTP %d) on #%s - "
+                "[instagram] Blocked (HTTP %d) on #%s — "
                 "falling back to manual import. "
                 "Use the GUI manual import for Instagram posts.",
                 response.status_code,

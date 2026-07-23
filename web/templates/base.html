@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}GamesTracker{% endblock %}</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css" />
+
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" defer></script>
+
+  <!-- Alpine.js -->
+  <script src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+
+<!-- ======================== SIDEBAR ======================== -->
+<div class="layout">
+  <aside class="sidebar" x-data="{ open: false }" :class="{ 'sidebar--open': open }">
+    <div class="sidebar__header">
+      <a href="/" class="sidebar__logo">
+        <span class="sidebar__logo-icon">◈</span>
+        <span class="sidebar__logo-text">GamesTracker</span>
+      </a>
+      <button class="sidebar__toggle" @click="open = !open" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+
+    <nav class="sidebar__nav">
+      <a href="/"
+         class="sidebar__link {% if request.url.path == '/' %}sidebar__link--active{% endif %}">
+        <span class="sidebar__link-icon">▦</span>
+        Dashboard
+      </a>
+      <a href="/trends"
+         class="sidebar__link {% if request.url.path == '/trends' %}sidebar__link--active{% endif %}">
+        <span class="sidebar__link-icon">↗</span>
+        Trends
+      </a>
+      <a href="/reports"
+         class="sidebar__link {% if request.url.path == '/reports' %}sidebar__link--active{% endif %}">
+        <span class="sidebar__link-icon">◧</span>
+        Reports
+      </a>
+    </nav>
+
+    <div class="sidebar__footer">
+      <a href="/health" class="sidebar__status-dot" title="Health check">
+        <span class="pulse"></span>
+        API Online
+      </a>
+    </div>
+  </aside>
+
+  <!-- ======================== MAIN CONTENT ======================== -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<!-- ======================== FOOTER ======================== -->
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <span class="site-footer__brand">◈ GamesTracker</span>
+    <span class="site-footer__copy">Indie game growth intelligence</span>
+    <span class="site-footer__version">v0.1.0</span>
+  </div>
+</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,4 +1,4 @@
-"""Scraper HowLongToBeat - stima durata di gioco.
+"""Scraper HowLongToBeat — stima durata di gioco.
 
 Non esiste un'API ufficiale. Usiamo una POST a:
     ``https://howlongtobeat.com/api/search``

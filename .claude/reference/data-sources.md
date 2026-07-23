@@ -160,3 +160,150 @@ REDDIT_USER_AGENT=GamesTracker/0.1 by <username>
 - Reddit API rate limit: https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki — https://praw.readthedocs.io/en/stable/getting_started/ratelimits.html
 </content>
 </invoke>
+
+
+---
+
+## RAWG Game Database API ✅
+
+- Endpoint base: `https://api.rawg.io/api/`
+- Auth: API key via query param `?key=<RAWG_API_KEY>` — variabile `RAWG_API_KEY`.
+- Ottenere key: https://rawg.io/apidocs (gratuita, 20.000 req/mese su piano free).
+- Endpoint principali:
+  - `GET /games?key=&search=<title>&page_size=5` — cerca giochi per nome.
+  - `GET /games/<id>?key=` — dettaglio singolo gioco: name, released, genres, tags, rating, ratings_count, playtime, website, screenshots_count, developers, publishers.
+  - `GET /games/<id>/screenshots?key=` — lista screenshot.
+- ✅ Rate limit: ~5 req/sec (empirico su piano free). Nessun limite burst documentato.
+- Uso previsto: enrichment metadati (generi autorevoli, rating community) per giochi trovati via Steam/itch.
+
+---
+
+## IGDB (Twitch) ✅
+
+- Endpoint base: `https://api.igdb.com/v4/`
+- Auth: **Twitch OAuth** (Client Credentials). Variabili: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`.
+  - Token URL: `https://id.twitch.tv/oauth2/token` (POST con client_id, client_secret, grant_type=client_credentials).
+  - Token scade — implementare refresh automatico.
+- Header richiesti: `Client-ID: <TWITCH_CLIENT_ID>`, `Authorization: Bearer <access_token>`.
+- Linguaggio query: **Apicalypse** (DSL proprietario, non REST standard).
+  - Esempio: `POST /games` body: `fields name,genres.name,rating,first_release_date; where name ~ *"Celeste"*; limit 5;`
+- Endpoint principali:
+  - `/games` — ricerca per nome, filtri per genere/piattaforma, rating, data uscita.
+  - `/genres` — lista generi (ID stabili, utili per filtri).
+  - `/platforms` — PC = id 6, Mac = 14, Linux = 3.
+  - `/release_dates` — date di uscita per piattaforma.
+- ✅ Rate limit: 4 req/sec (documentato). Limite giornaliero non dichiarato ma generoso (>500k req/giorno empirico su uso normale).
+- Uso previsto: calendario nuove uscite PC indie + metadati autorevoli (generi IGDB sono più puliti di Steam tags).
+
+---
+
+## HowLongToBeat (HLtB) ⚠️
+
+- **Nessuna API pubblica ufficiale.** L'unico accesso è tramite reverse-engineering delle richieste web.
+- Metodo attuale (libreria Python): `howlongtobeatpy` (https://github.com/ScrappyCocco/HowLongToBeat-PythonAPI)
+  - `await HowLongToBeat().async_search(game_name)` — cerca per nome, ritorna lista di risultati.
+  - Ogni risultato: `main_story`, `main_extra`, `completionist` (ore), `game_name`, `game_id`, `review_score`.
+  - La libreria usa `POST https://howlongtobeat.com/api/search` con payload JSON (reverse-engineered).
+- ⚠️ **Fragile**: HLtB ha già cambiato endpoint. Usare la versione più recente della libreria.
+- ⚠️ Rate limit: non documentato. Usare throttle conservativo (1 req / 3s).
+- Uso previsto: playtime come segnale di profondità/engagement per il quality score.
+
+---
+
+## OpenCritic ⚠️
+
+- Endpoint base: `https://api.opencritic.com/api/`
+- Auth: **nessuna** (API pubblica senza key per uso non commerciale a basso volume).
+  - ⚠️ Da verificare: il ToS di OpenCritic non è stato controllato al 2026-07-23. Fare scraping molto conservativo.
+- Endpoint principali:
+  - `GET /game/search?criteria=<name>` — cerca per nome, ritorna lista con `id`, `name`, `firstReleaseDate`.
+  - `GET /game/<id>` — dettaglio: `topCriticScore`, `percentRecommended`, `numReviews`, `numTopCriticReviews`, `Genres`, `platforms`.
+  - `GET /game/<id>/reviews` — lista recensioni (critic name, score, url).
+- ⚠️ Rate limit: non documentato. Empiricamente nessun limite per uso leggero (1 req / 2s sembra sicuro).
+- Uso previsto: validazione quality score con dati di critica professionale.
+
+---
+
+## TikTok — Scraping no-auth ⚠️ (in progress)
+
+Nessuna API pubblica per raccogliere metriche di post altrui. Approccio: scraping della webapp pubblica.
+
+### Endpoint
+- Search: `https://www.tiktok.com/api/search/general/full/?keyword=<query>&type=1` — risposta JSON (reverse-engineered, fragile).
+- Profilo: `https://www.tiktok.com/@<username>` — HTML con JSON-LD nei metadati.
+- Singolo video: `https://www.tiktok.com/@<username>/video/<video_id>` — HTML + OEmbed.
+
+### Approccio alternativo (più stabile)
+- `TikTokApi` (davidteather, v6.x) — usa Playwright. Configurazione: `TIKTOK_MS_TOKEN` (cookie) opzionale.
+- Senza `ms_token`: funziona per ricerche pubbliche ma con quota ridotta.
+- ⚠️ Rischio blocco IP elevato. Consigliato `PROXY_URL` quando attivo.
+
+### Rate limit
+- 1 req / 3s senza proxy (empirico). Con proxy ruotante: fino a 1 req / 1.5s.
+
+### Fallback
+- Import manuale tramite GUI (`manual_import.py`) — sempre disponibile, nessun rischio ban.
+- `SCRAPING_ENABLED` deve essere `false` di default.
+
+---
+
+## Instagram — Scraping no-auth ⚠️ (in progress)
+
+Nessuna API pubblica per metriche di post altrui (Graph API richiede business verification).
+
+### Endpoint
+- Profilo pubblico: `https://www.instagram.com/<username>/?__a=1&__d=dis` — JSON (spesso bloccato).
+- Singolo post OEmbed: `https://graph.facebook.com/v18.0/instagram_oembed?url=<post_url>&access_token=...` — richiede token.
+- Alternativa senza auth: `https://www.instagram.com/p/<shortcode>/?__a=1` — fragile, soggetto a login-wall.
+
+### Libreria
+- `instaloader` — scraping pubblico senza login (fino a ~10 richieste prima del login-wall dal 2025).
+- Con login: rischio ban dell'account usato. **Non usare login in produzione.**
+
+### Rate limit
+- 1 req / 5s senza login (empirico). Dopo ~10 req consecutive → login-wall.
+- Consigliato: batch limitati, proxy ruotante, pausa tra sessioni.
+
+### Fallback
+- Import manuale tramite GUI — sempre disponibile.
+
+---
+
+## X/Twitter — Scraping via Nitter ⚠️ (in progress)
+
+X/Twitter non ha API gratuite utili per raccogliere tweet altrui (API v2 free tier: 1500 tweet/mese).
+
+### Approccio: Nitter
+- Nitter è un frontend alternativo di X che espone dati pubblici senza autenticazione.
+- Config: `NITTER_INSTANCE` (default: `https://nitter.net`).
+- Endpoint:
+  - Search: `<nitter_instance>/search?q=<query>&f=tweets` — HTML, parsabile con BeautifulSoup.
+  - Profilo: `<nitter_instance>/<username>` — HTML.
+  - RSS: `<nitter_instance>/<username>/rss` — feed RSS parsabile con feedparser.
+- ⚠️ Nitter pubblico (`nitter.net`) spesso inaffidabile. **Raccomandato: istanza self-hosted** (https://github.com/zedeus/nitter).
+
+### Rate limit
+- 1 req / 2s per istanza (empirico). Istanza self-hosted: limite solo dal server locale.
+
+### Fallback
+- Senza Nitter funzionante, la sorgente X ritorna `[]` (graceful degradation).
+
+---
+
+## Variabili d'ambiente aggiornate (config/.env.example)
+
+Vedi `config/.env.example` per la lista completa. Nuove variabili aggiunte in sessione 2:
+```
+RAWG_API_KEY
+TWITCH_CLIENT_ID
+TWITCH_CLIENT_SECRET
+SCRAPING_ENABLED
+SCRAPING_INTERVAL_HOURS
+NITTER_INSTANCE
+PROXY_URL
+DISCORD_WEBHOOK_URL
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+NOTIFICATIONS_ENABLED
+WEB_PORT
+```

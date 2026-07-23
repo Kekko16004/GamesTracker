@@ -1,0 +1,87 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for GamesTracker
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please describe your idea clearly so it can be discussed and prioritised effectively.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem does this feature solve? What workflow is currently painful or missing?
+      placeholder: "I often find myself having to manually check Steam every week to see if a game's player count spiked because…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature you would like to see and how it would work from a user perspective.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you tried any workarounds or alternative approaches? Why are they insufficient?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Target component
+      description: Which part of GamesTracker would this feature affect?
+      multiple: true
+      options:
+        - Collector / Scheduler
+        - GUI (PyQt6)
+        - Database / Models
+        - Steam source
+        - Itch.io source
+        - Reddit source
+        - YouTube source
+        - Notifications
+        - Analysis / Scoring
+        - Docker / Deployment
+        - New data source
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How important is this to you?
+      options:
+        - Nice to have
+        - Would significantly improve my workflow
+        - Blocking — I cannot use GamesTracker effectively without this
+    validations:
+      required: true
+
+  - type: textarea
+    id: mockup
+    attributes:
+      label: Mockup / example output
+      description: If applicable, share a sketch, screenshot, or example of what the output or UI would look like.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I have searched existing issues and this has not already been requested.
+          required: true
+        - label: This feature is relevant to tracking indie games (not a general-purpose tool request).
+          required: false

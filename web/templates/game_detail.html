@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}{{ game.title }} — GamesTracker{% endblock %}
+
+{% block content %}
+<!-- ======== HERO ======== -->
+<div class="detail-hero">
+  {% if game.header_image %}
+  <div class="detail-hero__img-wrap">
+    <img src="{{ game.header_image }}" alt="{{ game.title }}" class="detail-hero__img" />
+  </div>
+  {% endif %}
+
+  <div class="detail-hero__body">
+    <div class="detail-hero__badges">
+      <span class="badge badge--{{ game.platform }}">{{ game.platform | platform_label }}</span>
+      {% if game.is_free %}
+      <span class="badge badge--free">Free</span>
+      {% elif game.price %}
+      <span class="badge badge--price">${{ "%.2f" | format(game.price) }}</span>
+      {% endif %}
+      {% if game.has_demo %}
+      <span class="badge badge--demo">Has Demo</span>
+      {% endif %}
+    </div>
+
+    <h1 class="detail-hero__title">{{ game.title }}</h1>
+
+    {% if game.developer %}
+    <p class="detail-hero__dev">
+      by <strong>{{ game.developer }}</strong>
+      {% if game.publisher and game.publisher != game.developer %} · Published by {{ game.publisher }}{% endif %}
+    </p>
+    {% endif %}
+
+    {% if game.genres %}
+    <div class="detail-hero__genres">
+      {% for g in game.genres %}
+      <span class="tag">{{ g }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if game.tags %}
+    <div class="detail-hero__tags">
+      {% for t in game.tags[:8] %}
+      <span class="tag tag--sm tag--muted">{{ t }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if game.store_url %}
+    <a href="{{ game.store_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--primary">
+      View on Store ↗
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ======== GROWTH METRICS CARDS ======== -->
+<section class="section">
+  <h2 class="section__title">Growth Metrics</h2>
+  <div class="metrics-grid">
+    <div class="metric-card {{ game.quality_score | score_class }}">
+      <span class="metric-card__value mono">
+        {% if game.quality_score is not none %}{{ "%.1f" | format(game.quality_score) }}{% else %}—{% endif %}
+      </span>
+      <span class="metric-card__label">Quality Score</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-card__value mono">
+        {% if game.latest_players is not none %}{{ "{:,}".format(game.latest_players) }}{% else %}—{% endif %}
+      </span>
+      <span class="metric-card__label">Current Players</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-card__value mono">
+        {% if game.latest_reviews is not none %}{{ "{:,}".format(game.latest_reviews) }}{% else %}—{% endif %}
+      </span>
+      <span class="metric-card__label">Total Reviews</span>
+    </div>
+    <div class="metric-card {% if game.review_growth and game.review_growth > 0 %}metric-card--up{% elif game.review_growth and game.review_growth < 0 %}metric-card--down{% endif %}">
+      <span class="metric-card__value mono">
+        {% if game.review_growth is not none %}
+          {% if game.review_growth > 0 %}+{% endif %}{{ "{:,}".format(game.review_growth) }}
+        {% else %}—{% endif %}
+      </span>
+      <span class="metric-card__label">Review Growth (all time)</span>
+    </div>
+    <div class="metric-card">
+      <span class="metric-card__value mono">
+        {{ game.release_date if game.release_date else '—' }}
+      </span>
+      <span class="metric-card__label">Release Date</span>
+    </div>
+    {% if game.demo_release_date %}
+    <div class="metric-card">
+      <span class="metric-card__value mono">{{ game.demo_release_date }}</span>
+      <span class="metric-card__label">Demo Released</span>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- ======== CHARTS ======== -->
+{% if game.snapshots %}
+<section class="section">
+  <h2 class="section__title">Player Count over Time</h2>
+  <div class="chart-wrap">
+    <canvas id="playersChart"></canvas>
+  </div>
+</section>
+
+<section class="section">
+  <h2 class="section__title">Reviews over Time</h2>
+  <div class="chart-wrap">
+    <canvas id="reviewsChart"></canvas>
+  </div>
+</section>
+{% endif %}
+
+<!-- ======== SOCIAL ACCOUNTS ======== -->
+{% if game.social_accounts %}
+<section class="section">
+  <h2 class="section__title">Social Accounts</h2>
+  <div class="social-accounts">
+    {% for acc in game.social_accounts %}
+    <div class="social-account-card">
+      <span class="social-account-card__icon">{{ acc.platform | social_icon }}</span>
+      <div class="social-account-card__info">
+        <span class="social-account-card__platform">{{ acc.platform | capitalize }}</span>
+        {% if acc.handle %}<span class="social-account-card__handle">@{{ acc.handle }}</span>{% endif %}
+      </div>
+      <div class="social-account-card__followers">
+        <span class="mono">{% if acc.latest_followers is not none %}{{ "{:,}".format(acc.latest_followers) }}{% else %}—{% endif %}</span>
+        <span class="social-account-card__followers-label">followers</span>
+      </div>
+      {% if acc.url %}
+      <a href="{{ acc.url }}" target="_blank" rel="noopener noreferrer" class="btn btn--sm btn--ghost">Visit ↗</a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<!-- ======== SOCIAL TIMELINE ======== -->
+{% if game.timeline %}
+<section class="section">
+  <h2 class="section__title">Marketing Timeline</h2>
+  <div class="timeline">
+    {% for event in game.timeline %}
+    <div class="timeline-event timeline-event--{{ event.kind }}">
+      <div class="timeline-event__dot"></div>
+      <div class="timeline-event__body">
+        <div class="timeline-event__meta">
+          <span class="timeline-event__kind badge badge--{{ event.kind }}">{{ event.kind | capitalize }}</span>
+          {% if event.platform %}<span class="timeline-event__platform">{{ event.platform | social_icon }} {{ event.platform }}</span>{% endif %}
+          <span class="timeline-event__date mono">{{ event.when[:10] if event.when else '' }}</span>
+        </div>
+        <p class="timeline-event__label">
+          {% if event.url %}
+          <a href="{{ event.url }}" target="_blank" rel="noopener noreferrer">{{ event.label }}</a>
+          {% else %}
+          {{ event.label }}
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<!-- ======== SOCIAL POSTS TABLE ======== -->
+{% if game.social_posts %}
+<section class="section">
+  <h2 class="section__title">Social Mentions</h2>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Platform</th>
+          <th>Date</th>
+          <th>Title</th>
+          <th class="num">Views</th>
+          <th class="num">Likes</th>
+          <th class="num">Comments</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for post in game.social_posts %}
+        <tr>
+          <td>
+            <span class="social-badge">{{ post.platform | social_icon }} {{ post.platform }}</span>
+          </td>
+          <td class="mono">{{ post.posted_at[:10] if post.posted_at else '—' }}</td>
+          <td>
+            {% if post.url %}
+            <a href="{{ post.url }}" target="_blank" rel="noopener noreferrer" class="text-link">
+              {{ post.title or '(no title)' }}
+            </a>
+            {% else %}
+            {{ post.title or '—' }}
+            {% endif %}
+          </td>
+          <td class="num mono">{{ "{:,}".format(post.views) if post.views is not none else '—' }}</td>
+          <td class="num mono">{{ "{:,}".format(post.likes) if post.likes is not none else '—' }}</td>
+          <td class="num mono">{{ "{:,}".format(post.comments) if post.comments is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if game.snapshots %}
+<script>
+  // ---- Shared chart defaults ----
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.borderColor = '#1e293b';
+  Chart.defaults.font.family = 'Inter, sans-serif';
+
+  const snapshots = {{ game.snapshots | tojson }};
+
+  const labels = snapshots.map(s => {
+    const d = new Date(s.captured_at);
+    return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+  });
+
+  // ---- Players chart ----
+  const playerData = snapshots.map(s => s.current_players);
+  const ctxPlayers = document.getElementById('playersChart').getContext('2d');
+  new Chart(ctxPlayers, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Current Players',
+        data: playerData,
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.1)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#6366f1',
+        tension: 0.3,
+        fill: true,
+        spanGaps: true,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1e293b' } },
+        y: { grid: { color: '#1e293b' }, beginAtZero: true },
+      },
+    },
+  });
+
+  // ---- Reviews chart ----
+  const reviewData  = snapshots.map(s => s.total_reviews);
+  const positiveData = snapshots.map(s => s.total_positive);
+  const ctxReviews = document.getElementById('reviewsChart').getContext('2d');
+  new Chart(ctxReviews, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Total Reviews',
+          data: reviewData,
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56,189,248,0.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.3,
+          fill: true,
+          spanGaps: true,
+        },
+        {
+          label: 'Positive',
+          data: positiveData,
+          borderColor: '#4ade80',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.3,
+          spanGaps: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { boxWidth: 12 } } },
+      scales: {
+        x: { grid: { color: '#1e293b' } },
+        y: { grid: { color: '#1e293b' }, beginAtZero: true },
+      },
+    },
+  });
+</script>
+{% endif %}
+{% endblock %}

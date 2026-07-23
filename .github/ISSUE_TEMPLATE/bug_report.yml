@@ -1,0 +1,116 @@
+name: Bug Report
+description: Report a bug or unexpected behaviour in GamesTracker
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the sections below as completely as possible — the more detail you provide, the faster we can investigate.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: "When I do X, Y happens instead of Z."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Launch run_collector.py
+        2. Add a game with Steam App ID …
+        3. Wait for the first data collection cycle
+        4. See error …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happened? Include any error messages or stack traces.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      description: Which part of GamesTracker is affected?
+      multiple: true
+      options:
+        - Collector / Scheduler
+        - GUI (PyQt6)
+        - Database / Models
+        - Steam source
+        - Itch.io source
+        - Reddit source
+        - YouTube source
+        - Notifications
+        - Analysis / Scoring
+        - Docker / Deployment
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: "e.g. 3.10.11"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "e.g. Ubuntu 22.04 / Windows 11 / macOS 14"
+    validations:
+      required: true
+
+  - type: input
+    id: gamestracker_version
+    attributes:
+      label: GamesTracker version / commit
+      placeholder: "e.g. v0.3.1 or commit abc1234"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste any relevant log lines here (collector stdout, pytest output, etc.)
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: I am running a supported Python version (3.10, 3.11, or 3.12).
+          required: true
+        - label: I have reproduced this on the latest commit of the main branch.
+          required: false

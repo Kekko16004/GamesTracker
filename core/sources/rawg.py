@@ -1,4 +1,4 @@
-"""Client RAWG.io - ricerca e dettaglio giochi.
+"""Client RAWG.io — ricerca e dettaglio giochi.
 
 Endpoint base: ``https://api.rawg.io/api``
 
@@ -10,7 +10,7 @@ Endpoint usati:
 
 La API key si legge dalla variabile d'ambiente ``RAWG_API_KEY``. Se assente,
 il modulo e' comunque importabile ma ogni funzione di fetch logga un avviso e
-ritorna ``None`` / lista vuota, senza sollevare eccezioni - "graceful degrade".
+ritorna ``None`` / lista vuota, senza sollevare eccezioni — "graceful degrade".
 
 Il client ritorna dataclass normalizzate; non scrive sul DB.
 """
@@ -162,7 +162,7 @@ def _check_key() -> Optional[str]:
     key = _get_api_key()
     if key is None:
         logger.warning(
-            "RAWG_API_KEY non configurata - sorgente RAWG non disponibile. "
+            "RAWG_API_KEY non configurata — sorgente RAWG non disponibile. "
             "Impostare la variabile d'ambiente RAWG_API_KEY per abilitarla."
         )
     return key

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Error {{ status_code }} — GamesTracker{% endblock %}
+
+{% block content %}
+<div class="error-page">
+  <div class="error-page__code mono">{{ status_code }}</div>
+  <h1 class="error-page__title">
+    {% if status_code == 404 %}Not Found{% else %}Something went wrong{% endif %}
+  </h1>
+  <p class="error-page__detail">{{ detail }}</p>
+  <a href="/" class="btn btn--primary">Back to Dashboard</a>
+</div>
+{% endblock %}

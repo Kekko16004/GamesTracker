@@ -1,4 +1,4 @@
-"""Client OpenCritic - aggregatore recensioni critici.
+"""Client OpenCritic — aggregatore recensioni critici.
 
 Supporta due base URL:
 - Diretto:  ``https://api.opencritic.com/api``  (no auth per endpoint pubblici)
@@ -10,8 +10,8 @@ modulo usa direttamente api.opencritic.com (che e' pubblicamente accessibile
 per ricerche di base).
 
 Endpoint usati:
-- ``/game/search?criteria=<nome>`` - ricerca
-- ``/game/{id}``                   - dettaglio (score, percentRecommended, ...)
+- ``/game/search?criteria=<nome>`` — ricerca
+- ``/game/{id}``                   — dettaglio (score, percentRecommended, ...)
 
 Il client ritorna dataclass normalizzate; non scrive sul DB.
 """
@@ -214,7 +214,7 @@ def search_game(
     """
     if _use_rapidapi() and not _rapidapi_key():
         logger.warning(
-            "RAPIDAPI_KEY mancante - OpenCritic via RapidAPI non disponibile."
+            "RAPIDAPI_KEY mancante — OpenCritic via RapidAPI non disponibile."
         )
         return []
 
@@ -257,7 +257,7 @@ def fetch_game_detail(
     """
     if _use_rapidapi() and not _rapidapi_key():
         logger.warning(
-            "RAPIDAPI_KEY mancante - OpenCritic via RapidAPI non disponibile."
+            "RAPIDAPI_KEY mancante — OpenCritic via RapidAPI non disponibile."
         )
         return None
 

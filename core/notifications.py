@@ -127,7 +127,7 @@ def _discord_payload_for(notification_type: NotificationType, data: dict[str, An
         previous = data.get("previous_players", 0)
         pct = data.get("pct_change", 0.0)
         embed = _discord_embed(
-            title=f"Player spike - {game}",
+            title=f"Player spike — {game}",
             description=(
                 f"**{game}** ({platform}) just had a significant player-count surge."
             ),
@@ -144,7 +144,7 @@ def _discord_payload_for(notification_type: NotificationType, data: dict[str, An
         url = data.get("url", "")
         snippet = data.get("snippet", "")
         embed = _discord_embed(
-            title=f"New mention - {game}",
+            title=f"New mention — {game}",
             description=(
                 f"**{game}** was mentioned on **{source}** ({platform})."
             ),
@@ -173,7 +173,7 @@ def _discord_payload_for(notification_type: NotificationType, data: dict[str, An
             name = g.get("game_name", "?")
             pct = g.get("pct_change", 0.0)
             arrow = "+" if pct >= 0 else ""
-            lines.append(f"- **{name}** - {arrow}{pct:.1f}%")
+            lines.append(f"• **{name}** — {arrow}{pct:.1f}%")
         description = "\n".join(lines) if lines else "No data for this period."
         embed = _discord_embed(
             title=f"Weekly digest ({period})",
@@ -189,7 +189,7 @@ def _discord_payload_for(notification_type: NotificationType, data: dict[str, An
         threshold = data.get("threshold", 0.0)
         direction = "above" if data.get("direction", "above") == "above" else "below"
         embed = _discord_embed(
-            title=f"Quality threshold crossed - {game}",
+            title=f"Quality threshold crossed — {game}",
             description=(
                 f"**{game}** ({platform}) quality score moved **{direction}** the threshold."
             ),
@@ -230,7 +230,7 @@ def _tg_text_for(notification_type: NotificationType, data: dict[str, Any]) -> s
         previous = data.get("previous_players", 0)
         pct = data.get("pct_change", 0.0)
         return (
-            f"*Player spike - {game}*\n"
+            f"*Player spike — {game}*\n"
             f"Platform: {platform}\n"
             f"Current: *{current:,}* \\| Previous: *{previous:,}*\n"
             f"Change: *\\+{pct:.1f}%*"
@@ -241,7 +241,7 @@ def _tg_text_for(notification_type: NotificationType, data: dict[str, Any]) -> s
         url = data.get("url", "")
         snippet = esc(data.get("snippet", "")[:300])
         msg = (
-            f"*New mention - {game}*\n"
+            f"*New mention — {game}*\n"
             f"Platform: {platform} \\| Source: {source}\n"
         )
         if snippet:
@@ -258,7 +258,7 @@ def _tg_text_for(notification_type: NotificationType, data: dict[str, Any]) -> s
             name = esc(g.get("game_name", "?"))
             pct = g.get("pct_change", 0.0)
             arrow = "\\+" if pct >= 0 else ""
-            lines.append(f"- {name} - {arrow}{pct:.1f}%")
+            lines.append(f"• {name} — {arrow}{pct:.1f}%")
         lines.append(f"\n_Games tracked: {len(games)}_")
         return "\n".join(lines)
 
@@ -267,7 +267,7 @@ def _tg_text_for(notification_type: NotificationType, data: dict[str, Any]) -> s
         threshold = data.get("threshold", 0.0)
         direction = esc(data.get("direction", "above"))
         return (
-            f"*Quality threshold crossed - {game}*\n"
+            f"*Quality threshold crossed — {game}*\n"
             f"Platform: {platform}\n"
             f"Score: *{score:.1f}* \\| Threshold: *{threshold:.1f}*\n"
             f"Direction: *{direction}*"
@@ -357,10 +357,25 @@ async def send_notification(
         One of ``game_spike``, ``new_social_mention``, ``weekly_digest``,
         ``quality_threshold_crossed``.
     data:
-        Dictionary with notification payload.
+        Dictionary with notification payload. Required keys vary by type:
+
+        ``game_spike``
+            game_name, platform, current_players, previous_players, pct_change
+
+        ``new_social_mention``
+            game_name, platform, source, url (optional), snippet (optional)
+
+        ``weekly_digest``
+            games (list of dicts with game_name, pct_change), period_label
+
+        ``quality_threshold_crossed``
+            game_name, platform, score, threshold, direction ("above"/"below")
+
     channels:
         Subset of ``["discord", "telegram"]`` to target. Defaults to all
         configured channels.
+    _cfg_override / _client_override:
+        Testing seams — do not use in production code.
     """
     if not _notifications_enabled():
         logger.debug("Notifications disabled (NOTIFICATIONS_ENABLED not set). Skipping.")
@@ -368,7 +383,7 @@ async def send_notification(
 
     if notification_type not in VALID_TYPES:
         logger.warning(
-            "Unknown notification type %r - sending as generic notification.",
+            "Unknown notification type %r — sending as generic notification.",
             notification_type,
         )
 
@@ -385,7 +400,7 @@ async def send_notification(
         target_channels = set(channels)
 
     if not target_channels:
-        logger.debug("No notification channels configured or requested - nothing to send.")
+        logger.debug("No notification channels configured or requested — nothing to send.")
         return
 
     async def _dispatch(client: httpx.AsyncClient) -> None:

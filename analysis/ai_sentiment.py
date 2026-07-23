@@ -5,13 +5,13 @@ e regex. Ogni recensione viene classificata in una o piu' categorie
 (multi-label), con un confidence score per categoria.
 
 Categorie supportate:
-- ``bug_report``        - segnalazioni di bug, crash, errori tecnici
-- ``performance_issue`` - problemi di performance (FPS, lag, stuttering)
-- ``praise``            - apprezzamento genuino per il gioco
-- ``feature_request``   - richieste di funzionalita' o miglioramenti
-- ``content_feedback``  - feedback sul contenuto (storia, livelli, durata)
-- ``ui_ux``             - feedback su interfaccia e UX
-- ``monetization``      - feedback su prezzo, DLC, microtransazioni
+- ``bug_report``        — segnalazioni di bug, crash, errori tecnici
+- ``performance_issue`` — problemi di performance (FPS, lag, stuttering)
+- ``praise``            — apprezzamento genuino per il gioco
+- ``feature_request``   — richieste di funzionalita' o miglioramenti
+- ``content_feedback``  — feedback sul contenuto (storia, livelli, durata)
+- ``ui_ux``             — feedback su interfaccia e UX
+- ``monetization``      — feedback su prezzo, DLC, microtransazioni
 
 Design:
 - ``classify_review(text) -> list[tuple[str, float]]``

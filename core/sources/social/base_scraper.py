@@ -140,7 +140,7 @@ class _RateLimiter:
 
 #: Maximum number of retry attempts on transient failures.
 MAX_RETRIES: int = 3
-#: Base delay (seconds) for exponential back-off: 1s, 2s, 4s, ...
+#: Base delay (seconds) for exponential back-off: 1s, 2s, 4s, …
 _BACKOFF_BASE: float = 1.0
 #: HTTP status codes worth retrying (server-side transient errors).
 _RETRYABLE_STATUS: frozenset[int] = frozenset({429, 500, 502, 503, 504})
@@ -255,7 +255,7 @@ class BaseScraper(ABC):
                     if attempt < MAX_RETRIES:
                         await asyncio.sleep(wait)
                         continue
-                    # Exhausted retries - return the last response anyway so
+                    # Exhausted retries — return the last response anyway so
                     # the caller can inspect the status code.
                     return response
 
@@ -264,7 +264,7 @@ class BaseScraper(ABC):
             except (httpx.TransportError, httpx.TimeoutException) as exc:
                 wait = _BACKOFF_BASE * (2 ** attempt)
                 logger.warning(
-                    "[%s] Network error on %s (attempt %d/%d): %s - retrying in %.1fs",
+                    "[%s] Network error on %s (attempt %d/%d): %s — retrying in %.1fs",
                     self.platform,
                     url,
                     attempt + 1,

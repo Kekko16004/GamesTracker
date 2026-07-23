@@ -1,4 +1,4 @@
-"""Reddit async scraper without API key - public JSON API only.
+"""Reddit async scraper without API key — public JSON API only.
 
 Supplements the existing PRAW-based ``RedditSource`` (``reddit.py``) with a
 credential-free alternative that uses Reddit's public JSON API endpoints:
@@ -10,8 +10,9 @@ No OAuth tokens, no PRAW, no credentials required.  Reddit allows up to ~30
 unauthenticated JSON API requests per minute (enforced server-side via
 User-Agent and IP; the rate limiter here stays conservative at 30 rpm).
 
-Subreddits monitored by default: ``indiegaming``, ``gamedev``, ``Games``,
-``pcgaming``, ``steam``, ``itchio``.
+Subreddits monitored by default (from ``marketing-playbook.md`` §3.1 + task
+spec): ``indiegaming``, ``gamedev``, ``Games``, ``pcgaming``, ``steam``,
+``itchio``.
 
 Design notes:
 - This module is **additive**: it does NOT replace ``reddit.py`` (PRAW).
@@ -37,7 +38,7 @@ PLATFORM = "reddit"
 # Reddit public JSON API base URL.
 _REDDIT_API_BASE = "https://www.reddit.com"
 
-# Default subreddits to search.
+# Default subreddits to search (task spec + marketing-playbook).
 DEFAULT_SUBREDDITS: list[str] = [
     "indiegaming",
     "gamedev",
@@ -73,7 +74,7 @@ def _post_data_to_social_post(data: dict) -> Optional[SocialPost]:
 
     Returns ``None`` if the minimum required fields are absent.
 
-    Mapping:
+    Mapping (playbook §2.2):
     - ``score``           -> likes
     - ``num_comments``    -> comments
     - ``created_utc``     -> posted_at
@@ -120,7 +121,7 @@ class RedditNoAuthScraper(BaseScraper):
     """Async Reddit scraper using the public JSON API (no credentials needed).
 
     Supplements the PRAW-based ``RedditSource``; does NOT replace it. Both
-    can be used together - the orchestrator deduplicates on ``post_url``.
+    can be used together — the orchestrator deduplicates on ``post_url``.
 
     Args:
         subreddits: List of subreddits to search (default: ``DEFAULT_SUBREDDITS``).

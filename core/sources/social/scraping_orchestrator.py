@@ -12,8 +12,8 @@ Configuration (from ``config/.env`` / environment):
     PROXY_URL               optional proxy URL for all scrapers
 
 Entry points:
-    ``run_all(game_titles)``    - runs all scrapers for a list of game titles
-    ``run_once_sync(...)``      - sync wrapper for use from APScheduler jobs
+    ``run_all(game_titles)``    — runs all scrapers for a list of game titles
+    ``run_once_sync(...)``      — sync wrapper for use from APScheduler jobs
 """
 
 from __future__ import annotations

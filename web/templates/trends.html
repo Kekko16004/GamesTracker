@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Trends — GamesTracker{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header__titles">
+    <h1 class="page-header__h1">Genre Trends</h1>
+    <p class="page-header__sub">Comparing {{ data.genre_trends | length }} genres across {{ data.stats.visible_games }} tracked games</p>
+  </div>
+  <form class="page-header__controls" hx-get="/trends" hx-target="body" hx-push-url="true">
+    <label class="filter-bar__label" for="min_score" x-data="{ score: {{ current_min_score }} }">
+      Min score <span class="mono" x-text="score"></span>
+      <input id="min_score" name="min_score" type="range" min="0" max="100" step="5"
+             class="filter-bar__range" x-model="score" value="{{ current_min_score }}" />
+    </label>
+  </form>
+</div>
+
+<!-- ======== SUMMARY STRIP ======== -->
+<div class="stats-strip">
+  <div class="stat-card">
+    <span class="stat-card__value mono">{{ data.genre_trends | length }}</span>
+    <span class="stat-card__label">Genres</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-card__value mono">{{ data.stats.visible_games }}</span>
+    <span class="stat-card__label">Games</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-card__value mono">{{ data.top_growing | length }}</span>
+    <span class="stat-card__label">Top Growing</span>
+  </div>
+</div>
+
+<!-- ======== CHARTS ======== -->
+{% if data.genre_trends %}
+<div class="charts-row">
+  <!-- Genre game count bar chart -->
+  <section class="section section--half">
+    <h2 class="section__title">Games per Genre</h2>
+    <div class="chart-wrap chart-wrap--tall">
+      <canvas id="genreCountChart"></canvas>
+    </div>
+  </section>
+
+  <!-- Genre avg quality score -->
+  <section class="section section--half">
+    <h2 class="section__title">Avg Quality Score by Genre</h2>
+    <div class="chart-wrap chart-wrap--tall">
+      <canvas id="genreScoreChart"></canvas>
+    </div>
+  </section>
+</div>
+
+<!-- Genre review growth bar chart -->
+<section class="section">
+  <h2 class="section__title">Total Review Growth by Genre</h2>
+  <div class="chart-wrap">
+    <canvas id="genreGrowthChart"></canvas>
+  </div>
+</section>
+{% endif %}
+
+<!-- ======== TOP GROWING GAMES ======== -->
+{% if data.top_growing %}
+<section class="section">
+  <h2 class="section__title">Top Growing Games</h2>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Title</th>
+          <th>Platform</th>
+          <th>Genres</th>
+          <th class="num">Quality Score</th>
+          <th class="num">Review Growth</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for game in data.top_growing %}
+        <tr>
+          <td class="mono muted">{{ loop.index }}</td>
+          <td>
+            <a href="/game/{{ game.id }}" class="text-link">{{ game.title }}</a>
+          </td>
+          <td>
+            <span class="badge badge--{{ game.platform }}">{{ game.platform | platform_label }}</span>
+          </td>
+          <td>
+            {% for g in game.genres[:2] %}
+            <span class="tag tag--sm">{{ g }}</span>
+            {% endfor %}
+          </td>
+          <td class="num mono {{ game.quality_score | score_class }}">
+            {{ "%.0f" | format(game.quality_score) if game.quality_score is not none else '—' }}
+          </td>
+          <td class="num mono {% if game.review_growth and game.review_growth > 0 %}text-up{% endif %}">
+            {% if game.review_growth is not none %}
+              {% if game.review_growth > 0 %}+{% endif %}{{ "{:,}".format(game.review_growth) }}
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<!-- ======== GENRE HEATMAP ======== -->
+{% if data.genre_distribution %}
+<section class="section">
+  <h2 class="section__title">Genre Distribution Heatmap</h2>
+  <div class="genre-heatmap">
+    {% set max_count = data.genre_distribution.values() | max %}
+    {% for genre, count in data.genre_distribution.items() %}
+    {% set intensity = (count / max_count * 100) | int %}
+    <div
+      class="heatmap-cell"
+      style="--intensity: {{ intensity }}%"
+      title="{{ genre }}: {{ count }} games"
+    >
+      <span class="heatmap-cell__name">{{ genre }}</span>
+      <span class="heatmap-cell__count mono">{{ count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if not data.genre_trends %}
+<div class="empty-state">
+  <div class="empty-state__icon">↗</div>
+  <h3 class="empty-state__title">No trend data available</h3>
+  <p class="empty-state__sub">Add games with genres through the desktop app to see trends.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if data.genre_trends %}
+<script>
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.borderColor = '#1e293b';
+  Chart.defaults.font.family = 'Inter, sans-serif';
+
+  const trends = {{ data.genre_trends | tojson }};
+  const labels = trends.map(t => t.genre);
+  const palette = [
+    '#6366f1','#38bdf8','#4ade80','#f59e0b','#f43f5e',
+    '#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9',
+    '#facc15','#2dd4bf','#f97316','#818cf8','#a3e635',
+  ];
+
+  function makeColor(idx) {
+    return palette[idx % palette.length];
+  }
+
+  // ---- Game count ----
+  new Chart(document.getElementById('genreCountChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Games',
+        data: trends.map(t => t.game_count),
+        backgroundColor: labels.map((_, i) => makeColor(i) + 'cc'),
+        borderColor: labels.map((_, i) => makeColor(i)),
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1e293b' }, beginAtZero: true },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+
+  // ---- Avg quality score ----
+  new Chart(document.getElementById('genreScoreChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg Quality Score',
+        data: trends.map(t => t.avg_quality_score),
+        backgroundColor: labels.map((_, i) => makeColor(i) + 'cc'),
+        borderColor: labels.map((_, i) => makeColor(i)),
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1e293b' }, beginAtZero: true, max: 100 },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+
+  // ---- Review growth ----
+  new Chart(document.getElementById('genreGrowthChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Total Review Growth',
+        data: trends.map(t => t.total_review_growth),
+        backgroundColor: labels.map((_, i) => makeColor(i) + 'cc'),
+        borderColor: labels.map((_, i) => makeColor(i)),
+        borderWidth: 1,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: '#1e293b' }, beginAtZero: true },
+      },
+    },
+  });
+</script>
+{% endif %}
+{% endblock %}
