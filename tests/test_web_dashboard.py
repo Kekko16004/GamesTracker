@@ -297,6 +297,13 @@ class TestDashboard:
                 resp = tc.get("/?search=nonexistent")
         assert "No games found" in resp.text
 
+    def test_empty_string_query_params_returns_200(self, client):
+        tc, _ = client
+        url = "/?search=&developer=&platform=&sort_by=quality_score&genre=&tag=&min_score=0&max_score=100&min_price=&max_price=&revenue=likely_recouped"
+        resp = tc.get(url)
+        assert resp.status_code == 200
+
+
 
 # ---------------------------------------------------------------------------
 # Game detail page

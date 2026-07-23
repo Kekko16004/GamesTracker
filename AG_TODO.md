@@ -14,6 +14,9 @@
 - [x] fix Chart.js y-axis ticks autoSkip false in trends.html (100%)
 - [x] add filters and sort to reports page (web & data_access) (100%)
 - [x] fix AI copilot errors & add settings UI in GUI/web (100%)
+- [x] fix 422 Unprocessable Entity in dashboard route for empty string query params (100%)
+
+
 
 
 

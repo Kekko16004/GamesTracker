@@ -9,7 +9,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
+
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -134,34 +135,70 @@ async def health() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
+def _clean_str(val: Optional[str]) -> Optional[str]:
+    """Returns stripped string or None if empty."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    return s if s else None
+
+
+def _clean_float(val: Any, default: Optional[float] = None) -> Optional[float]:
+    """Safely converts string or numeric values to float, tolerating empty strings."""
+    if val is None or str(val).strip() == "":
+        return default
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return default
+
+
 @app.get("/", response_class=HTMLResponse, tags=["pages"])
 async def dashboard(
     request: Request,
     platform: Optional[str] = Query(None),
-    min_score: float = Query(0.0, ge=0.0, le=100.0),
-    max_score: float = Query(100.0, ge=0.0, le=100.0),
-    sort_by: str = Query("quality_score"),
+    min_score: Optional[Union[float, str]] = Query("0"),
+    max_score: Optional[Union[float, str]] = Query("100"),
+    sort_by: Optional[str] = Query("quality_score"),
     genre: Optional[str] = Query(None),
     tag: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     developer: Optional[str] = Query(None),
     revenue: Optional[str] = Query(None),
-    min_price: Optional[float] = Query(None),
-    max_price: Optional[float] = Query(None),
+    min_price: Optional[Union[float, str]] = Query(None),
+    max_price: Optional[Union[float, str]] = Query(None),
 ) -> HTMLResponse:
     """Main dashboard — game cards grid with advanced filtering."""
+    clean_platform = _clean_str(platform)
+    clean_genre = _clean_str(genre)
+    clean_tag = _clean_str(tag)
+    clean_search = _clean_str(search)
+    clean_developer = _clean_str(developer)
+    clean_revenue = _clean_str(revenue)
+    clean_sort = _clean_str(sort_by) or "quality_score"
+
+    num_min_score = _clean_float(min_score, 0.0)
+    if num_min_score is None:
+        num_min_score = 0.0
+    num_max_score = _clean_float(max_score, 100.0)
+    if num_max_score is None:
+        num_max_score = 100.0
+
+    num_min_price = _clean_float(min_price, None)
+    num_max_price = _clean_float(max_price, None)
+
     games = da.get_games_list(
-        platform=platform,
-        min_score=min_score,
-        max_score=max_score,
-        sort_by=sort_by,
-        genre=genre,
-        tag=tag,
-        search=search,
-        developer=developer,
-        revenue_filter=revenue,
-        min_price=min_price,
-        max_price=max_price,
+        platform=clean_platform,
+        min_score=num_min_score,
+        max_score=num_max_score,
+        sort_by=clean_sort,
+        genre=clean_genre,
+        tag=clean_tag,
+        search=clean_search,
+        developer=clean_developer,
+        revenue_filter=clean_revenue,
+        min_price=num_min_price,
+        max_price=num_max_price,
     )
     stats = da.get_dashboard_stats(min_score=0.0)
     genres = da.get_available_genres()
@@ -173,17 +210,17 @@ async def dashboard(
         "stats": stats,
         "genres": genres,
         "tags": tags,
-        "current_platform": platform or "",
-        "current_min_score": min_score,
-        "current_max_score": max_score,
-        "current_sort": sort_by,
-        "current_genre": genre or "",
-        "current_tag": tag or "",
-        "current_search": search or "",
-        "current_developer": developer or "",
-        "current_revenue": revenue or "",
-        "current_min_price": min_price if min_price is not None else "",
-        "current_max_price": max_price if max_price is not None else "",
+        "current_platform": clean_platform or "",
+        "current_min_score": num_min_score,
+        "current_max_score": num_max_score,
+        "current_sort": clean_sort,
+        "current_genre": clean_genre or "",
+        "current_tag": clean_tag or "",
+        "current_search": clean_search or "",
+        "current_developer": clean_developer or "",
+        "current_revenue": clean_revenue or "",
+        "current_min_price": num_min_price if num_min_price is not None else "",
+        "current_max_price": num_max_price if num_max_price is not None else "",
     }
 
     # Detect HTMX partial request (only re-render the cards grid container).
@@ -191,6 +228,7 @@ async def dashboard(
         return templates.TemplateResponse(request, "partials/game_list.html", ctx)
 
     return templates.TemplateResponse(request, "dashboard.html", ctx)
+
 
 
 
@@ -231,11 +269,13 @@ async def game_detail(request: Request, game_id: int) -> HTMLResponse:
 
 
 @app.get("/trends", response_class=HTMLResponse, tags=["pages"])
-async def trends(request: Request, min_score: float = Query(0.0, ge=0.0, le=100.0)) -> HTMLResponse:
+async def trends(request: Request, min_score: Optional[Union[float, str]] = Query("0")) -> HTMLResponse:
     """Genre trends view."""
-    data = da.get_trend_data(min_score=min_score)
-    ctx = {**_base_context(request), "data": data, "current_min_score": min_score}
+    num_min_score = _clean_float(min_score, 0.0) or 0.0
+    data = da.get_trend_data(min_score=num_min_score)
+    ctx = {**_base_context(request), "data": data, "current_min_score": num_min_score}
     return templates.TemplateResponse(request, "trends.html", ctx)
+
 
 
 @app.get("/reports", response_class=HTMLResponse, tags=["pages"])
@@ -655,20 +695,21 @@ async def add_social_post(request: Request, game_id: int):
 @app.get("/api/games", tags=["api"])
 async def api_games(
     platform: Optional[str] = Query(None, description="Filter by platform: steam or itch"),
-    min_score: float = Query(0.0, ge=0.0, le=100.0, description="Minimum quality score"),
-    sort_by: str = Query("quality_score", description="Sort field: quality_score, growth, recency, title"),
+    min_score: Optional[Union[float, str]] = Query("0", description="Minimum quality score"),
+    sort_by: Optional[str] = Query("quality_score", description="Sort field: quality_score, growth, recency, title"),
     genre: Optional[str] = Query(None, description="Filter by genre string"),
     search: Optional[str] = Query(None, description="Search game title"),
     limit: Optional[int] = Query(None, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> list[dict[str, Any]]:
     """JSON list of games with optional filtering and sorting."""
+    num_min_score = _clean_float(min_score, 0.0) or 0.0
     return da.get_games_list(
-        platform=platform,
-        min_score=min_score,
-        sort_by=sort_by,
-        genre=genre,
-        search=search,
+        platform=_clean_str(platform),
+        min_score=num_min_score,
+        sort_by=_clean_str(sort_by) or "quality_score",
+        genre=_clean_str(genre),
+        search=_clean_str(search),
         limit=limit,
         offset=offset,
     )
@@ -697,10 +738,12 @@ async def api_game_social(game_id: int) -> dict[str, Any]:
 
 @app.get("/api/trends", tags=["api"])
 async def api_trends(
-    min_score: float = Query(0.0, ge=0.0, le=100.0),
+    min_score: Optional[Union[float, str]] = Query("0"),
 ) -> dict[str, Any]:
     """JSON genre trend data."""
-    return da.get_trend_data(min_score=min_score)
+    num_min_score = _clean_float(min_score, 0.0) or 0.0
+    return da.get_trend_data(min_score=num_min_score)
+
 
 
 @app.get("/api/reports", tags=["api"])
