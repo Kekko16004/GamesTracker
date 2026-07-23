@@ -15,6 +15,9 @@
 - [x] add filters and sort to reports page (web & data_access) (100%)
 - [x] fix AI copilot errors & add settings UI in GUI/web (100%)
 - [x] fix 422 Unprocessable Entity in dashboard route for empty string query params (100%)
+- [x] apply patch ed732c83-bd04-4039-87ce-60946160c9b7.patch to main & push (100%)
+
+
 
 
 

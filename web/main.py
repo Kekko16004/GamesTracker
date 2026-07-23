@@ -7,9 +7,13 @@ same SQLite database used by the desktop GUI.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Union
+
+# Project root for config file paths.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -410,7 +414,7 @@ async def ai_generate(request: Request) -> JSONResponse:
             "error": "Modulo AI non disponibile. Verifica che core/ai/ esista."
         }, status_code=500)
     except Exception as exc:
-        logger.exception("AI generation failed: %s", exc)
+        log.exception("AI generation failed: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
@@ -480,7 +484,7 @@ async def save_ai_config(request: Request) -> JSONResponse:
         with open(env_path, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
     except Exception as exc:
-        logger.warning("Could not persist config/.env: %s", exc)
+        log.warning("Could not persist config/.env: %s", exc)
 
     return JSONResponse({"status": "ok", "message": "Configurazione AI salvata con successo!"})
 
@@ -759,3 +763,30 @@ async def api_report_detail(report_id: int) -> dict[str, Any]:
     if rep is None:
         raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
     return rep
+
+
+@app.get("/api/game/{game_id}/enrich", tags=["api"])
+async def api_enrich_game(game_id: int, cc: str = Query("us")) -> dict[str, Any]:
+    """Fetch SteamDB-style enrichment data for a game.
+
+    Returns real-time price (with regional pricing), Twitch streaming stats
+    (30-day viewers/channels/peak from Sullygnome), and owner estimates
+    (VG Insights / Gamalytic method from review count).
+    """
+    detail = da.get_game_detail(game_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+
+    from core.sources.steamdb_enrichment import enrich_game_data
+
+    appid = detail.get("external_id", "")
+    title = detail.get("title", "")
+    reviews = detail.get("latest_reviews") or 0
+
+    enrichment = await enrich_game_data(
+        appid=str(appid),
+        game_name=title,
+        review_count=int(reviews),
+        cc=cc,
+    )
+    return enrichment

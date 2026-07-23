@@ -348,9 +348,102 @@
 </div>
 </div>
 
+<!-- ======== STEAMDB-STYLE ENRICHMENT (fetched live via API) ======== -->
+<div x-data="enrichmentPanel()" x-init="load()" class="enrichment-section" style="margin-top:24px;">
+  <h2 style="font-size:1.2rem; margin-bottom:16px;">📊 Live Market Data</h2>
+
+  <template x-if="loading">
+    <div style="text-align:center; padding:20px; color:var(--text-secondary);">
+      <span class="ai-spinner-inline"></span> Loading live data from Steam + Twitch...
+    </div>
+  </template>
+
+  <template x-if="!loading && data">
+    <div class="stats-strip" style="grid-template-columns: repeat(3, 1fr);">
+      <!-- Store Data -->
+      <div class="stat-card" style="text-align:left; padding:16px;">
+        <h3 style="font-size:.85rem; color:var(--text-secondary); margin-bottom:10px; text-transform:uppercase;">Store Data</h3>
+        <template x-if="data.price_data">
+          <div>
+            <div style="margin-bottom:6px;">
+              <span class="mono" style="font-size:1.4rem; font-weight:700;" x-text="data.price_data.is_free ? 'Free' : '$' + data.price_data.price.toFixed(2)"></span>
+              <template x-if="data.price_data.discount_percent > 0">
+                <span class="revenue-flag revenue-flag--recouped" x-text="'-' + data.price_data.discount_percent + '%'"></span>
+              </template>
+            </div>
+            <div style="font-size:.8rem; color:var(--text-secondary);" x-text="data.price_data.currency"></div>
+          </div>
+        </template>
+        <template x-if="!data.price_data">
+          <span style="color:var(--text-secondary);">Price not available</span>
+        </template>
+      </div>
+
+      <!-- Twitch Stats -->
+      <div class="stat-card" style="text-align:left; padding:16px;">
+        <h3 style="font-size:.85rem; color:var(--text-secondary); margin-bottom:10px; text-transform:uppercase;">Twitch Stats (30d)</h3>
+        <template x-if="data.twitch_stats">
+          <div>
+            <div style="margin-bottom:4px;"><span class="mono" style="font-size:1.2rem; font-weight:600;" x-text="(data.twitch_stats.avg_viewers || 0).toLocaleString()"></span> <span style="font-size:.8rem; color:var(--text-secondary);">avg viewers</span></div>
+            <div style="margin-bottom:4px;"><span class="mono" x-text="(data.twitch_stats.peak_viewers || 0).toLocaleString()"></span> <span style="font-size:.8rem; color:var(--text-secondary);">peak viewers</span></div>
+            <div><span class="mono" x-text="(data.twitch_stats.channels || 0).toLocaleString()"></span> <span style="font-size:.8rem; color:var(--text-secondary);">channels</span></div>
+          </div>
+        </template>
+        <template x-if="!data.twitch_stats">
+          <span style="color:var(--text-secondary);">No Twitch data found</span>
+        </template>
+      </div>
+
+      <!-- Owner Estimates -->
+      <div class="stat-card" style="text-align:left; padding:16px;">
+        <h3 style="font-size:.85rem; color:var(--text-secondary); margin-bottom:10px; text-transform:uppercase;">Owner Estimates</h3>
+        <template x-if="data.owner_estimates && data.owner_estimates.med > 0">
+          <div>
+            <div style="margin-bottom:4px;"><span style="font-size:.75rem; color:var(--text-secondary);">~</span><span class="mono" style="font-size:1.2rem; font-weight:600;" x-text="formatOwners(data.owner_estimates.low)"></span> <span style="font-size:.75rem; color:var(--text-secondary);">by VG Insights</span></div>
+            <div style="margin-bottom:4px;"><span style="font-size:.75rem; color:var(--text-secondary);">~</span><span class="mono" style="font-size:1.2rem; font-weight:600;" x-text="formatOwners(data.owner_estimates.med)"></span> <span style="font-size:.75rem; color:var(--text-secondary);">by PlayTracker</span></div>
+            <div><span style="font-size:.75rem; color:var(--text-secondary);">~</span><span class="mono" style="font-size:1.2rem; font-weight:600;" x-text="formatOwners(data.owner_estimates.high)"></span> <span style="font-size:.75rem; color:var(--text-secondary);">by Gamalytic</span></div>
+          </div>
+        </template>
+        <template x-if="!data.owner_estimates || data.owner_estimates.med <= 0">
+          <span style="color:var(--text-secondary);">Not enough reviews to estimate</span>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <template x-if="!loading && error">
+    <div style="color:var(--text-secondary); font-size:.85rem;" x-text="error"></div>
+  </template>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
+<script>
+function enrichmentPanel() {
+  return {
+    data: null,
+    loading: true,
+    error: '',
+    async load() {
+      try {
+        const resp = await fetch('/api/game/{{ game.id }}/enrich');
+        if (!resp.ok) throw new Error('Failed to load');
+        this.data = await resp.json();
+      } catch(e) {
+        this.error = 'Could not load live market data';
+      } finally {
+        this.loading = false;
+      }
+    },
+    formatOwners(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return n.toString();
+    }
+  }
+}
+</script>
 {% if game.snapshots %}
 <script>
   Chart.defaults.color = '#9ca3b8';
