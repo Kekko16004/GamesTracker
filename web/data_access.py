@@ -144,10 +144,13 @@ def _compute_revenue_flag(
     if price is not None:
         try:
             p = float(price)
+            if p > 500:
+                p = round(p / 100.0, 2)
         except (TypeError, ValueError):
             pass
 
     if p is not None and p > 0:
+
 
         net_min = p * low_owners * (1 - _STEAM_CUT)
         net_avg = p * owners * (1 - _STEAM_CUT)
