@@ -73,6 +73,20 @@
       {% endif %}
     </div>
 
+    <!-- Price + Revenue flag -->
+    <div class="game-card__price-row">
+      {% if game.is_free %}
+        <span class="price-badge price-badge--free">Free</span>
+      {% elif game.price %}
+        <span class="price-badge">${{ "%.2f"|format(game.price) }}</span>
+      {% endif %}
+      {% if game.revenue_flag and game.revenue_flag.flag != 'unknown' %}
+        <span class="revenue-flag revenue-flag--{{ game.revenue_flag.flag }}" title="{{ game.revenue_flag.details }}">
+          {{ game.revenue_flag.label_en }}
+        </span>
+      {% endif %}
+    </div>
+
     <!-- Release date -->
     {% if game.release_date %}
     <p class="game-card__date">Released {{ game.release_date }}</p>

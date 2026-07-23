@@ -1830,3 +1830,57 @@ button { font-family: inherit; }
 .modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
 .modal-content h2 { margin-bottom: 16px; font-size: 1.2rem; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+
+/* ==========================================================================
+   PRICE & REVENUE FLAGS
+   ========================================================================== */
+
+.game-card__price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.price-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .8rem;
+  font-weight: 600;
+  background: var(--surface-2, #242836);
+  color: var(--text, #e4e7ef);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #2e3347);
+}
+.price-badge--free {
+  background: rgba(34,197,94,.12);
+  color: #22c55e;
+  border-color: rgba(34,197,94,.3);
+}
+
+.revenue-flag {
+  font-size: .75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: help;
+}
+.revenue-flag--recouped {
+  background: rgba(34,197,94,.12);
+  color: #22c55e;
+}
+.revenue-flag--likely_recouped {
+  background: rgba(245,158,11,.12);
+  color: #f59e0b;
+}
+.revenue-flag--not_recouped {
+  background: rgba(239,68,68,.12);
+  color: #ef4444;
+}
+.revenue-flag--free {
+  background: rgba(6,182,212,.12);
+  color: #06b6d4;
+}
+
+.form-hint { display: block; font-size: .75rem; color: var(--text-secondary, #9ca3b8); margin-top: 3px; }
+.price-value-note { margin-top: 8px; padding: 8px 12px; background: var(--surface-2, #242836); border-radius: 6px; font-size: .85rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

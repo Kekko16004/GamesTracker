@@ -38,7 +38,83 @@ def _fmt_dt(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat()
 
 
-# --- Public functions -----------------------------------------------------
+# --- Revenue flag -----------------------------------------------------------
+
+# Steam publication fee is $100. A game "breaks even" if estimated revenue > $100.
+# Steam takes ~30% cut, so net revenue = price * owners * 0.7.
+_STEAM_FEE = 100.0
+_STEAM_CUT = 0.30
+_DEFAULT_PRICE_MIN = 3.99   # assume minimum indie price if unknown
+_DEFAULT_PRICE_MAX = 14.99  # assume maximum indie price if unknown
+
+
+def _compute_revenue_flag(
+    price: object,
+    is_free: bool,
+    owners_estimate: object,
+) -> dict[str, Any]:
+    """Estimate whether a game has recouped the $100 Steam publication fee.
+
+    Returns a dict with:
+      - flag: "recouped" | "not_recouped" | "likely_recouped" | "unknown" | "free"
+      - label_it / label_en: human-readable labels
+      - estimated_revenue_min / max: revenue range estimate
+      - details: explanation string
+    """
+    if is_free:
+        return {"flag": "free", "label_it": "Gratis", "label_en": "Free",
+                "estimated_revenue_min": 0, "estimated_revenue_max": 0,
+                "details": "Free to play — no direct revenue from sales"}
+
+    owners = None
+    if owners_estimate is not None:
+        try:
+            owners = int(owners_estimate)
+        except (TypeError, ValueError):
+            pass
+
+    if owners is None or owners <= 0:
+        return {"flag": "unknown", "label_it": "Dati insufficienti", "label_en": "Insufficient data",
+                "estimated_revenue_min": None, "estimated_revenue_max": None,
+                "details": "Not enough player/owner data to estimate revenue"}
+
+    p = None
+    if price is not None:
+        try:
+            p = float(price)
+        except (TypeError, ValueError):
+            pass
+
+    if p is not None and p > 0:
+        net = p * owners * (1 - _STEAM_CUT)
+        flag = "recouped" if net >= _STEAM_FEE else "not_recouped"
+        label_it = "Rientrato ✅" if flag == "recouped" else "Non rientrato ❌"
+        label_en = "Recouped ✅" if flag == "recouped" else "Not recouped ❌"
+        return {"flag": flag, "label_it": label_it, "label_en": label_en,
+                "estimated_revenue_min": round(net, 2), "estimated_revenue_max": round(net, 2),
+                "details": f"${p:.2f} × {owners} owners × 0.70 = ${net:.0f} net"}
+    else:
+        # Price unknown — estimate range with min/max indie prices
+        net_min = _DEFAULT_PRICE_MIN * owners * (1 - _STEAM_CUT)
+        net_max = _DEFAULT_PRICE_MAX * owners * (1 - _STEAM_CUT)
+        if net_min >= _STEAM_FEE:
+            flag = "recouped"
+            label_it = "Rientrato ✅"
+            label_en = "Recouped ✅"
+        elif net_max >= _STEAM_FEE:
+            flag = "likely_recouped"
+            label_it = "Prob. rientrato 🟡"
+            label_en = "Likely recouped 🟡"
+        else:
+            flag = "not_recouped"
+            label_it = "Non rientrato ❌"
+            label_en = "Not recouped ❌"
+        return {"flag": flag, "label_it": label_it, "label_en": label_en,
+                "estimated_revenue_min": round(net_min, 2), "estimated_revenue_max": round(net_max, 2),
+                "details": f"Price unknown, estimated ${_DEFAULT_PRICE_MIN}-${_DEFAULT_PRICE_MAX} × {owners} owners"}
+
+
+# --- Helpers ----------------------------------------------------------------
 
 
 def _make_thumbnail(platform: str, external_id: Optional[str], header_image: Optional[str]) -> Optional[str]:
@@ -143,8 +219,13 @@ def get_games_list(
     if limit is not None:
         rows = rows[:limit]
 
-    return [
-        {
+    result = []
+    for r in rows:
+        price = getattr(r, "price", None)
+        is_free = getattr(r, "is_free", False)
+        owners_est = r.latest_players  # proxy: player count as owner estimate
+        revenue_flag = _compute_revenue_flag(price, is_free, owners_est)
+        result.append({
             "id": r.id,
             "platform": r.platform,
             "external_id": r.external_id,
@@ -160,9 +241,11 @@ def get_games_list(
             "latest_reviews": r.latest_reviews,
             "latest_players": r.latest_players,
             "review_growth": r.review_growth,
-        }
-        for r in rows
-    ]
+            "price": price,
+            "is_free": is_free,
+            "revenue_flag": revenue_flag,
+        })
+    return result
 
 
 def get_game_detail(game_id: int) -> Optional[dict[str, Any]]:
