@@ -103,7 +103,7 @@ class Settings:
     reddit_user_agent: str = ""
 
     # --- Scraping social (TikTok, Instagram, X, Reddit no-auth) ---
-    scraping_enabled: bool = False
+    scraping_enabled: bool = True
     scraping_interval_hours: int = 6
     nitter_instance: str = "https://nitter.net"
     proxy_url: str = ""
@@ -200,7 +200,7 @@ def load_settings(env_file: Path | str | None = None) -> Settings:
         reddit_client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
         reddit_user_agent=os.getenv("REDDIT_USER_AGENT", ""),
         # Scraping social
-        scraping_enabled=_get_bool("SCRAPING_ENABLED", False),
+        scraping_enabled=_get_bool("SCRAPING_ENABLED", True),
         scraping_interval_hours=_get_int("SCRAPING_INTERVAL_HOURS", 6),
         nitter_instance=_get_str("NITTER_INSTANCE", "https://nitter.net"),
         proxy_url=os.getenv("PROXY_URL", ""),
