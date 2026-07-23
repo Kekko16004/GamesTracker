@@ -14,10 +14,11 @@ Condivide UNA sola ``QuotaTracker`` per l'intero giro, per rispettare il
 budget giornaliero YouTube (10k unita'). Degrada senza crashare: se la key
 manca la sorgente e' ``enabled=False`` e il job non fa nulla.
 
-TikTok / Instagram / X: import manuale via GUI (nessuna API pubblica
-affidabile/ToS-safe — decisione locked §2b). I post importati manualmente
-vengono gia' salvati in ``social_posts`` e inclusi nell'analisi.
-Reddit: opzionale — attivo solo se REDDIT_CLIENT_ID/SECRET/USER_AGENT
+TikTok / Instagram / X / Reddit (no-auth): ora coperti anche dallo
+scraping controllato in ``core.sources.social.scraping_orchestrator``
+(attivabile con SCRAPING_ENABLED=true in config/.env). L'import manuale
+via GUI resta sempre disponibile come fallback.
+Reddit PRAW: opzionale — attivo solo se REDDIT_CLIENT_ID/SECRET/USER_AGENT
 sono configurati in config/.env.
 """
 

@@ -102,6 +102,23 @@ class Settings:
     reddit_client_secret: str = ""
     reddit_user_agent: str = ""
 
+    # --- Scraping social (TikTok, Instagram, X, Reddit no-auth) ---
+    scraping_enabled: bool = False
+    scraping_interval_hours: int = 6
+    nitter_instance: str = "https://nitter.net"
+    proxy_url: str = ""
+
+    # --- Notifiche ---
+    notifications_enabled: bool = False
+    discord_webhook_url: str = ""
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
+    # --- Nuove sorgenti dati ---
+    rawg_api_key: str = ""
+    twitch_client_id: str = ""
+    twitch_client_secret: str = ""
+
     # Percorsi utili esposti come campi (non da .env)
     project_root: Path = field(default=PROJECT_ROOT)
     data_dir: Path = field(default=DATA_DIR)
@@ -174,6 +191,20 @@ def load_settings(env_file: Path | str | None = None) -> Settings:
         reddit_client_id=os.getenv("REDDIT_CLIENT_ID", ""),
         reddit_client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
         reddit_user_agent=os.getenv("REDDIT_USER_AGENT", ""),
+        # Scraping social
+        scraping_enabled=_get_bool("SCRAPING_ENABLED", False),
+        scraping_interval_hours=_get_int("SCRAPING_INTERVAL_HOURS", 6),
+        nitter_instance=_get_str("NITTER_INSTANCE", "https://nitter.net"),
+        proxy_url=os.getenv("PROXY_URL", ""),
+        # Notifiche
+        notifications_enabled=_get_bool("NOTIFICATIONS_ENABLED", False),
+        discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL", ""),
+        telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
+        telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
+        # Nuove sorgenti
+        rawg_api_key=os.getenv("RAWG_API_KEY", ""),
+        twitch_client_id=os.getenv("TWITCH_CLIENT_ID", ""),
+        twitch_client_secret=os.getenv("TWITCH_CLIENT_SECRET", ""),
     )
 
 

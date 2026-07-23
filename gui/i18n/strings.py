@@ -602,7 +602,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "the first sentence doesn't say what you do in the game",
     },
     # --- Raccolta dati "Raccogli ora" ---
-    "collect.button": {"it": "Raccogli ora", "en": "Collect now"},
+    "collect.button": {
+        "it": "🔄 Raccogli ora (dati + social)",
+        "en": "🔄 Collect now (data + social)",
+    },
     "collect.running": {
         "it": "Raccolta in corso...",
         "en": "Collecting...",
@@ -616,8 +619,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "Updating snapshots",
     },
     "collect.phase.social": {
-        "it": "Raccolta social (YouTube)",
-        "en": "Collecting social (YouTube)",
+        "it": "Raccolta social (YouTube + Reddit API)",
+        "en": "Collecting social (YouTube + Reddit API)",
+    },
+    "collect.phase.scraping": {
+        "it": "Scraping social (TikTok, Instagram, X, Reddit)",
+        "en": "Scraping social (TikTok, Instagram, X, Reddit)",
     },
     "collect.done": {"it": "Raccolta completata", "en": "Collection complete"},
     "collect.error": {
@@ -625,7 +632,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "Error during collection: {message}",
     },
     "collect.include_social": {
-        "it": "Includi social (YouTube)",
-        "en": "Include social (YouTube)",
+        "it": "Includi social (TikTok, IG, X, YouTube, Reddit)",
+        "en": "Include social (TikTok, IG, X, YouTube, Reddit)",
     },
 }

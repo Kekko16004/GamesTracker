@@ -6,7 +6,9 @@ questo modulo esegue UN singolo giro completo e termina:
 1. **discovery** — nuove uscite Steam + itch (``discovery.run_discovery``);
 2. **snapshots** — uno snapshot ``MANUAL`` per ogni gioco gia' tracciato,
    cosi' la serie storica avanza anche fuori dagli offset pianificati;
-3. **social** — post YouTube (+ Reddit opzionale) se ``include_social``.
+3. **social** — post YouTube (+ Reddit opzionale) se ``include_social``;
+4. **scraping** — scraping controllato TikTok, Instagram, X, Reddit (senza
+   API key) se ``include_social`` e ``SCRAPING_ENABLED=true`` nel config.
 
 **Contratto di progresso**: ogni avanzamento viene stampato su ``stdout`` come
 una riga::
@@ -124,17 +126,55 @@ def _run_social_phase(emit: EmitFn) -> None:
         emit("social", "error", 0, None, str(exc))
 
 
+def _run_scraping_phase(emit: EmitFn) -> None:
+    """Fase scraping: TikTok, Instagram, X, Reddit (senza API key).
+
+    Usa il nuovo scraping engine (core.sources.social.scraping_orchestrator).
+    Attivo SOLO se SCRAPING_ENABLED=true nel config/.env.
+    """
+    from core.config import get_settings
+
+    settings = get_settings()
+    scraping_enabled = getattr(settings, "scraping_enabled", False)
+
+    if not scraping_enabled:
+        emit(
+            "scraping", "skip", 0, None,
+            "Scraping social disabilitato (SCRAPING_ENABLED=false in .env)"
+        )
+        return
+
+    emit("scraping", "start", 0, None,
+         "Scraping TikTok, Instagram, X, Reddit...")
+    try:
+        from core.sources.social.scraping_orchestrator import run_once_sync
+        stats = run_once_sync()
+        total = stats.get("total_posts", 0) if isinstance(stats, dict) else 0
+        emit("scraping", "end", total, None,
+             f"{total} post trovati via scraping")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Fase scraping fallita")
+        emit("scraping", "error", 0, None, str(exc))
+
+
 def run_once(include_social: bool = True, emit: EmitFn = emit_progress) -> None:
     """Esegue un singolo giro di raccolta completo emettendo progresso.
 
     ``emit`` e' iniettabile per i test (default: stampa su stdout). Chiude
     sempre con un evento ``status="done"`` sulla fase ``all``.
+
+    Fasi:
+    1. discovery (nuove uscite Steam + itch)
+    2. snapshots (aggiornamento dati per ogni gioco tracciato)
+    3. social (YouTube API + Reddit PRAW)
+    4. scraping (TikTok, Instagram, X, Reddit no-auth) — se abilitato
     """
     init_db()  # schema idempotente
     _run_discovery_phase(emit)
     _run_snapshots_phase(emit)
     if include_social:
         _run_social_phase(emit)
+        _run_scraping_phase(emit)
     emit("all", "done", 0, None, "Raccolta completata")
 
 
