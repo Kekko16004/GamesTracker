@@ -28,6 +28,7 @@ from core.sources.social.base_scraper import SocialPost
 from core.sources.social.instagram_scraper import build_instagram_scraper
 from core.sources.social.reddit_noauth import build_reddit_noauth_scraper
 from core.sources.social.tiktok_scraper import build_tiktok_scraper
+from core.sources.social.twitch_scraper import build_twitch_scraper, build_kick_scraper
 from core.sources.social.x_scraper import DEFAULT_NITTER_INSTANCE, build_x_scraper
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,8 @@ class ScrapingOrchestrator:
         instagram_rpm: int = 20,
         x_rpm: int = 15,
         reddit_rpm: int = 30,
+        twitch_rpm: int = 20,
+        kick_rpm: int = 20,
     ) -> None:
         self._tiktok = build_tiktok_scraper(
             requests_per_minute=tiktok_rpm,
@@ -135,6 +138,14 @@ class ScrapingOrchestrator:
         )
         self._reddit = build_reddit_noauth_scraper(
             requests_per_minute=reddit_rpm,
+            proxy_url=proxy_url,
+        )
+        self._twitch = build_twitch_scraper(
+            requests_per_minute=twitch_rpm,
+            proxy_url=proxy_url,
+        )
+        self._kick = build_kick_scraper(
+            requests_per_minute=kick_rpm,
             proxy_url=proxy_url,
         )
 
@@ -263,6 +274,8 @@ class ScrapingOrchestrator:
                 self._safe_scrape(self._instagram, term),
                 self._safe_scrape(self._x, term),
                 self._safe_scrape(self._reddit, term),
+                self._safe_scrape(self._twitch, term),
+                self._safe_scrape(self._kick, term),
             ])
 
         results = await asyncio.gather(*tasks)

@@ -270,12 +270,21 @@ async def ai_generate(request: Request) -> JSONResponse:
                          "AI_MODEL=anthropic/claude-sonnet-4"
             }, status_code=400)
 
+        playtime = None
+        if body.get("estimated_playtime_hours"):
+            try:
+                playtime = float(body["estimated_playtime_hours"])
+            except (TypeError, ValueError):
+                pass
+
         brief = GameBrief(
             game_description=desc,
             genre=body.get("genre") or None,
             art_style=body.get("art_style") or None,
             target_audience=body.get("target_audience") or None,
             similar_games=(body.get("similar_games") or "").split(",") if body.get("similar_games") else None,
+            character_description=body.get("character_description") or None,
+            estimated_playtime_hours=playtime,
         )
 
         client = LLMClient(config)

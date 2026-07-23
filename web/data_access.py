@@ -47,36 +47,69 @@ _STEAM_CUT = 0.30
 _DEFAULT_PRICE_MIN = 3.99   # assume minimum indie price if unknown
 _DEFAULT_PRICE_MAX = 14.99  # assume maximum indie price if unknown
 
+# Owner estimation from reviews: VG Insights / Gamalytic research shows
+# the review-to-owner multiplier ranges from 20x to 80x depending on genre
+# and visibility. Median for indie games is ~30-50x.
+# Source: https://newsletter.gamediscover.co/p/how-many-units-has-a-steam-game-sold
+_REVIEW_TO_OWNER_MIN = 20   # conservative (niche/horror)
+_REVIEW_TO_OWNER_MED = 35   # median indie
+_REVIEW_TO_OWNER_MAX = 60   # popular/casual genres
+
+
+def _estimate_owners(reviews: object, players: object) -> Optional[int]:
+    """Estimate total owners from review count (preferred) or player count.
+
+    Uses the Boxleiter/VG Insights method: owners ~ reviews * 30-50x.
+    Falls back to concurrent players * 10x if no review data.
+    Returns the median estimate, or None if no data available.
+    """
+    # Prefer review-based estimate (more reliable)
+    if reviews is not None:
+        try:
+            r = int(reviews)
+            if r > 0:
+                return r * _REVIEW_TO_OWNER_MED
+        except (TypeError, ValueError):
+            pass
+    # Fallback: concurrent players * 10 (very rough)
+    if players is not None:
+        try:
+            p = int(players)
+            if p > 0:
+                return p * 10
+        except (TypeError, ValueError):
+            pass
+    return None
+
 
 def _compute_revenue_flag(
     price: object,
     is_free: bool,
     owners_estimate: object,
+    reviews: object = None,
 ) -> dict[str, Any]:
     """Estimate whether a game has recouped the $100 Steam publication fee.
 
-    Returns a dict with:
-      - flag: "recouped" | "not_recouped" | "likely_recouped" | "unknown" | "free"
-      - label_it / label_en: human-readable labels
-      - estimated_revenue_min / max: revenue range estimate
-      - details: explanation string
+    Uses review-to-owner multiplier (VG Insights / Gamalytic method):
+    - Reviews * 20x = conservative estimate
+    - Reviews * 35x = median estimate
+    - Reviews * 60x = optimistic estimate
+
+    Returns a dict with flag, labels (IT/EN), revenue estimates, and details.
     """
     if is_free:
         return {"flag": "free", "label_it": "Gratis", "label_en": "Free",
                 "estimated_revenue_min": 0, "estimated_revenue_max": 0,
-                "details": "Free to play — no direct revenue from sales"}
+                "estimated_owners": 0, "details": "Free to play"}
 
-    owners = None
-    if owners_estimate is not None:
-        try:
-            owners = int(owners_estimate)
-        except (TypeError, ValueError):
-            pass
+    # Estimate owners from reviews or players
+    owners = _estimate_owners(reviews, owners_estimate)
 
     if owners is None or owners <= 0:
         return {"flag": "unknown", "label_it": "Dati insufficienti", "label_en": "Insufficient data",
                 "estimated_revenue_min": None, "estimated_revenue_max": None,
-                "details": "Not enough player/owner data to estimate revenue"}
+                "estimated_owners": None,
+                "details": "Non ci sono abbastanza dati (recensioni/giocatori) per stimare"}
 
     p = None
     if price is not None:
@@ -223,8 +256,9 @@ def get_games_list(
     for r in rows:
         price = getattr(r, "price", None)
         is_free = getattr(r, "is_free", False)
-        owners_est = r.latest_players  # proxy: player count as owner estimate
-        revenue_flag = _compute_revenue_flag(price, is_free, owners_est)
+        revenue_flag = _compute_revenue_flag(
+            price, is_free, r.latest_players, reviews=r.latest_reviews
+        )
         result.append({
             "id": r.id,
             "platform": r.platform,

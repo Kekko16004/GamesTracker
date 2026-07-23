@@ -50,6 +50,7 @@ class GameBrief:
     art_style: str | None = None
     target_audience: str | None = None
     similar_games: list[str] = field(default_factory=list)
+<<<<<<< HEAD
     developers: list[str] = field(default_factory=list)
     price: float | None = None
 
@@ -61,6 +62,10 @@ class GameBrief:
         if "name" in d and not known.get("game_description"):
             known["game_description"] = str(d["name"])
         return cls(**known)
+=======
+    character_description: str | None = None
+    estimated_playtime_hours: float | None = None
+>>>>>>> feat: Twitch/Kick scrapers, character prompts, pricing AI, owner estimation
 
     def to_context_block(self) -> str:
         """Serialise the brief into a human-readable block for prompt injection."""
@@ -83,6 +88,10 @@ class GameBrief:
             lines.append(f"Target audience: {self.target_audience}")
         if self.similar_games:
             lines.append(f"Similar games: {', '.join(self.similar_games)}")
+        if self.character_description:
+            lines.append(f"Main character: {self.character_description}")
+        if self.estimated_playtime_hours:
+            lines.append(f"Estimated playtime: {self.estimated_playtime_hours} hours")
         return "\n".join(lines)
 
 

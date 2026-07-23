@@ -187,6 +187,20 @@ aspect ratios and composition rules:
 Each prompt must specify: subject, composition, camera angle, lighting,
 colour palette, art style, mood, and any negative prompts (what to avoid).
 
+If the game brief includes a **main character description**, generate an
+additional prompt specifically for the character:
+- **character_portrait**: a detailed prompt for generating the main character
+  as a standalone illustration (bust or full-body), matching the game's art
+  style. Include: pose, expression, clothing/armor details, colour palette,
+  background (simple, non-distracting), lighting. This prompt should be good
+  enough to produce a consistent character reference sheet.
+- Also incorporate the character naturally into capsule_main, header_image,
+  and at least one screenshot prompt.
+
+If NO character description is provided, suggest in the "character_portrait"
+field a brief character concept that would fit the game, and generate a prompt
+for it anyway (the developer can refine it later).
+
 Return a JSON object:
 
 {{
@@ -196,7 +210,8 @@ Return a JSON object:
   "library_hero": "<detailed prompt>",
   "screenshot_1": "<detailed prompt>",
   "screenshot_2": "<detailed prompt>",
-  "screenshot_3": "<detailed prompt>"
+  "screenshot_3": "<detailed prompt>",
+  "character_portrait": "<detailed prompt for the main character>"
 }}
 """
 
@@ -265,8 +280,18 @@ Produce:
    - **steam_capsule**: Tagline for the capsule art (very short, fits on image)
    - **social_media**: A tweet/post that would make someone stop scrolling
    - **press_email**: Opening line of a press pitch email
-   - **streamer_pitch**: Why a Twitch/YouTube creator should play this
+   - **streamer_pitch**: Why a Twitch/YouTube/Kick creator should play this
    - **community_post**: First line of a devlog / community update
+
+3. **pricing_advice**: Based on the game's genre, estimated playtime (if
+   provided), art style, and trending data from the market, suggest:
+   - **recommended_price**: Ideal USD price point (e.g. "$9.99")
+   - **price_range**: Low and high bounds ("$7.99 - $14.99")
+   - **reasoning**: Why this price fits the market (compare with similar games
+     in the trending data, consider playtime-to-price ratio, genre norms)
+   - **launch_discount**: Suggested launch week discount percentage (e.g. 10-20%)
+   The $1/hour rule is a common indie benchmark: if playtime is 8h, price
+   around $7.99-$9.99. Casual/short games can go lower; content-rich games higher.
 
 Return a JSON object:
 
@@ -292,6 +317,14 @@ Return a JSON object:
     {{
       "context": "community_post",
       "text": "<hook text>"
+    }}
+  ],
+  "pricing_advice": {{
+    "recommended_price": "<e.g. $9.99>",
+    "price_range": "<e.g. $7.99 - $14.99>",
+    "reasoning": "<explanation based on genre, playtime, market data>",
+    "launch_discount": "<e.g. 15%>"
+  }}
 }}
 """
 
@@ -302,5 +335,3 @@ PROMPT_TEMPLATES: dict[str, str] = {
     "tags": TAGS_PROMPT.replace("{game_brief}", "{brief}"),
     "marketing": MARKETING_PROMPT.replace("{game_brief}", "{brief}"),
 }
-
-
