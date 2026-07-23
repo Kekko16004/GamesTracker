@@ -1,0 +1,75 @@
+From 9deff0fb9c597ab1be687215e9de456fc11c9a42 Mon Sep 17 00:00:00 2001
+From: GamesTracker Bot <kekko16004@users.noreply.github.com>
+Date: Thu, 23 Jul 2026 22:41:49 +0200
+Subject: [PATCH] =?UTF-8?q?fix:=20AI=20page=20500=20=E2=80=94=20g.genres?=
+ =?UTF-8?q?=20is=20list=20not=20string,=20handle=20both=20types?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Root cause: get_ai_context_data() called .split(',') on g.genres
+which is already a list (not a string). Same bug in tag filter.
+
+Fix: check isinstance(genres, list) vs isinstance(genres, str)
+and handle both cases in get_ai_context_data() and tag filter.
+---
+ web/data_access.py | 32 +++++++++++++++++++++++---------
+ 1 file changed, 23 insertions(+), 9 deletions(-)
+
+diff --git a/web/data_access.py b/web/data_access.py
+index f4eafd5..18a9734 100644
+--- a/web/data_access.py
++++ b/web/data_access.py
+@@ -230,13 +230,18 @@ def get_games_list(
+         dev_needle = developer.lower()
+         rows = [r for r in rows if r.developer and dev_needle in r.developer.lower()]
+ 
+-    # Tag filter (search in genres string).
++    # Tag filter (search in genres — handles both str and list).
+     if tag:
+         tag_needle = tag.lower()
+-        rows = [
+-            r for r in rows
+-            if r.genres and tag_needle in r.genres.lower()
+-        ]
++
++        def _genres_match(genres_val, needle):
++            if isinstance(genres_val, str):
++                return needle in genres_val.lower()
++            if isinstance(genres_val, list):
++                return any(needle in str(g).lower() for g in genres_val)
++            return False
++
++        rows = [r for r in rows if r.genres and _genres_match(r.genres, tag_needle)]
+ 
+     # Build result dicts first (need price/revenue for filtering + sorting).
+     result = []
+@@ -625,12 +630,21 @@ def get_ai_context_data() -> dict[str, Any]:
+     top_games = scored[:20]
+ 
+     # Extract common tags from top games.
++    # g.genres can be a list or a comma-separated string depending on the model.
+     tag_counts: dict[str, int] = {}
+     for g in top_games:
+-        for genre in (g.genres or "").split(","):
+-            genre = genre.strip()
+-            if genre:
+-                tag_counts[genre] = tag_counts.get(genre, 0) + 1
++        genres_raw = g.genres or []
++        if isinstance(genres_raw, str):
++            genre_list = [x.strip() for x in genres_raw.split(",") if x.strip()]
++        elif isinstance(genres_raw, list):
++            genre_list = []
++            for item in genres_raw:
++                if isinstance(item, str):
++                    genre_list.extend(x.strip() for x in item.split(",") if x.strip())
++        else:
++            genre_list = []
++        for genre in genre_list:
++            tag_counts[genre] = tag_counts.get(genre, 0) + 1
+     top_tags = sorted(tag_counts, key=tag_counts.get, reverse=True)[:15]
+ 
+     # Top genres by average quality score.
+-- 
+2.49.0
+
