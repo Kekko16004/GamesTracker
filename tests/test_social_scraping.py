@@ -687,8 +687,29 @@ class TestXScraper:
 
 
 class TestRedditNoAuthScraper:
-    """Tests for RedditNoAuthScraper: JSON API parsing, dedup, error handling."""
+    """Tests for RedditNoAuthScraper: RSS Atom parsing, dedup, error handling."""
 
+    # Atom XML feed matching Reddit's actual RSS format.
+    _REDDIT_RSS_RESPONSE = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>search results - Crystal Quest</title>
+  <entry>
+    <author><name>/u/devcrystal</name></author>
+    <title>Crystal Quest - my new indie game!</title>
+    <link href="https://www.reddit.com/r/indiegaming/comments/abc123/crystal_quest/"/>
+    <updated>2023-11-14T22:13:20+00:00</updated>
+    <content type="html">&lt;p&gt;Crystal Quest is an indie game.&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <author><name>/u/gamer_review</name></author>
+    <title>Crystal Quest gameplay impressions</title>
+    <link href="https://www.reddit.com/r/indiegaming/comments/xyz789/crystal_quest_gameplay/"/>
+    <updated>2023-11-15T05:46:40+00:00</updated>
+    <content type="html">&lt;p&gt;Playing Crystal Quest today.&lt;/p&gt;</content>
+  </entry>
+</feed>"""
+
+    # Legacy JSON response kept for _post_data_to_social_post tests.
     _REDDIT_RESPONSE = {
         "data": {
             "children": [
@@ -723,21 +744,22 @@ class TestRedditNoAuthScraper:
     }
 
     def test_search_subreddit_parses_response(self):
-        """_search_subreddit should parse Reddit JSON API response into SocialPosts."""
+        """_search_subreddit should parse Reddit RSS Atom feed into SocialPosts."""
         RedditNoAuthScraper = _reddit_mod.RedditNoAuthScraper
         scraper = RedditNoAuthScraper(requests_per_minute=6000)
+        mock_resp = _make_response(status_code=200, text=self._REDDIT_RSS_RESPONSE)
 
-        with patch.object(scraper, "_get_json", new=AsyncMock(return_value=self._REDDIT_RESPONSE)):
+        with patch.object(scraper, "_get", new=AsyncMock(return_value=mock_resp)):
             posts = run(scraper._search_subreddit("indiegaming", "Crystal Quest"))
 
         assert len(posts) == 2
         p = posts[0]
         assert p.platform == "reddit"
         assert p.post_url == "https://www.reddit.com/r/indiegaming/comments/abc123/crystal_quest/"
-        assert p.likes == 234
-        assert p.comments == 45
         assert p.subreddit == "indiegaming"
         assert p.author == "devcrystal"
+        assert p.likes is None    # RSS does not include scores
+        assert p.comments is None  # RSS does not include comment counts
         assert p.views is None    # Reddit doesn't expose view counts
         assert p.shares is None   # Reddit doesn't expose share counts
         assert p.posted_at is not None
@@ -787,7 +809,8 @@ class TestRedditNoAuthScraper:
             subreddits=["indiegaming", "gamedev"],
             requests_per_minute=6000,
         )
-        with patch.object(scraper, "_get_json", new=AsyncMock(return_value=self._REDDIT_RESPONSE)):
+        mock_resp = _make_response(status_code=200, text=self._REDDIT_RSS_RESPONSE)
+        with patch.object(scraper, "_get", new=AsyncMock(return_value=mock_resp)):
             posts = run(scraper.scrape("Crystal Quest"))
 
         urls = [p.post_url for p in posts if p.post_url]
@@ -795,10 +818,14 @@ class TestRedditNoAuthScraper:
 
     def test_api_error_returns_empty(self):
         """Network errors should return empty list without raising."""
+        import httpx as _httpx
         RedditNoAuthScraper = _reddit_mod.RedditNoAuthScraper
         scraper = RedditNoAuthScraper(requests_per_minute=6000)
 
-        with patch.object(scraper, "_get_json", new=AsyncMock(return_value=None)):
+        with patch.object(
+            scraper, "_get",
+            new=AsyncMock(side_effect=_httpx.TransportError("fail")),
+        ):
             posts = run(scraper.scrape("Crystal Quest"))
 
         assert posts == []
