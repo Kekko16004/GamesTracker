@@ -33,8 +33,11 @@ Two fully independent processes communicate only through a shared SQLite databas
   │  RAWG    │──────────►  │  · Social collectors     │            │
   │  IGDB    │             │  · AI sentiment scoring  │            └──────────► Web Dashboard
   │  TikTok* │──────────►  └─────────────────────────┘                         (FastAPI)
-  │  Instagram│
-  │  HLtB    │             * social scrapers (rate-limited, graceful degradation)
+  │  Instagram│                                                              + AI Copilot
+  │  X/Twitter│            * social scrapers: no API key needed              + Simulator
+  │  Twitch  │               rate-limited, graceful degradation              + Social page
+  │  Kick    │
+  │  HLtB    │
   │  OpenCritic│
   └──────────┘
                                    Analysis Layer
@@ -57,27 +60,46 @@ Two fully independent processes communicate only through a shared SQLite databas
 | Steam player count | ✅ Implemented | GetNumberOfCurrentPlayers |
 | SteamSpy owner estimates | ✅ Implemented | Trend proxy |
 | YouTube video tracking | ✅ Implemented | Data API v3, quota-aware |
-| Reddit mentions | ✅ Implemented | PRAW, read-only |
-| Quality score (0–100) | ✅ Implemented | Anti-trash filter |
+| Reddit mentions (PRAW API) | ✅ Implemented | OAuth-based, read-only |
+| Reddit scraping (no-auth RSS) | ✅ Implemented | RSS/Atom feeds, no API key needed |
+| TikTok scraping | ✅ Implemented | Search page + hashtag + oembed, no auth |
+| Instagram scraping | ✅ Implemented | oembed + public profile, graceful fallback |
+| X/Twitter scraping | ✅ Implemented | Nitter RSS + HTML search fallback |
+| Twitch stream tracking | ✅ Implemented | Sullygnome API — viewers, channels, peak |
+| Kick stream tracking | ✅ Implemented | Kick API search, live status |
+| Quality score (0–100) | ✅ Implemented | Anti-trash filter with breakdown |
 | Growth tracking (+24h/48h/1w/1mo) | ✅ Implemented | Append-only time series |
 | Genre trend analysis | ✅ Implemented | pandas aggregation |
-| Bilingual reports (IT/EN) | ✅ Implemented | HTML + PDF export |
-| PyQt6 desktop GUI | ✅ Implemented | Dashboard, detail, trends, reports |
-| Manual social post import | ✅ Implemented | TikTok/IG URL + metrics |
-| RAWG game database | 🚧 In progress | Rich metadata enrichment |
-| IGDB (Twitch) | 🚧 In progress | Authoritative game metadata |
-| HowLongToBeat | 🚧 In progress | Playtime data |
-| OpenCritic | 🚧 In progress | Review aggregation |
-| TikTok scraping (no-auth) | 🚧 In progress | Nitter-style approach |
-| Instagram scraping | 🚧 In progress | Public profile data |
-| X/Twitter scraping | 🚧 In progress | No-auth public data |
-| AI sentiment analysis | 🚧 In progress | Reviews + social posts |
-| Market gap finder | 🚧 In progress | Under-served genres |
-| Launch health score | 🚧 In progress | Composite launch indicator |
-| FastAPI web dashboard | 🚧 In progress | HTMX + Jinja2 |
-| Docker / docker-compose | 🚧 In progress | Multi-stage build |
-| Discord / Telegram notifications | 🚧 In progress | Webhook alerts |
-| GitHub Actions CI/CD | 🚧 In progress | Lint + test on push |
+| Bilingual reports (IT/EN) | ✅ Implemented | HTML + PDF export, no duplicates |
+| Revenue estimation | ✅ Implemented | VG Insights / PlayTracker / Gamalytic method (review × 20-60x) |
+| "Recouped" flag | ✅ Implemented | price × owners vs $100 Steam fee |
+| PyQt6 desktop GUI | ✅ Implemented | Dashboard, detail, trends, reports, simulator, dark mode |
+| FastAPI web dashboard | ✅ Implemented | HTMX + Chart.js, dark theme, orange accent |
+| Web: Scan Now button | ✅ Implemented | Real-time progress bar (4 phases) |
+| Web: Advanced filters | ✅ Implemented | Search, developer, genre, tag, score range, price range, revenue flag |
+| Web: Quality Score Simulator | ✅ Implemented | Input game details → get predicted score + breakdown |
+| Web: AI Copilot | ✅ Implemented | LLM-powered: descriptions, titles, image prompts, tags, marketing |
+| Web: Social monitoring page | ✅ Implemented | All social posts across all games, platform filter |
+| Web: Manual social import | ✅ Implemented | Add posts from game detail page |
+| Web: SteamDB-style enrichment | ✅ Implemented | Live price + Twitch stats + owner estimates |
+| AI Copilot (LLM) | ✅ Implemented | OpenAI / OpenRouter / Anthropic / custom endpoint |
+| AI: Steam description generator | ✅ Implemented | Short + long, BBCode formatted |
+| AI: Title suggestions (10) | ✅ Implemented | Ranked by market fit + reasoning |
+| AI: Image prompt generator | ✅ Implemented | Capsule, header, hero, screenshots + character portrait |
+| AI: Tag optimizer | ✅ Implemented | 20 Steam tags ranked by priority |
+| AI: Marketing hooks | ✅ Implemented | Pitch + 5 context-specific hooks + pricing advice |
+| AI sentiment analysis | ✅ Implemented | 7 review categories, local heuristics |
+| Market gap finder | ✅ Implemented | Under-served genre+mechanic combos |
+| Launch health score (0–100) | ✅ Implemented | 5-signal composite: social velocity, sentiment, players, marketing, quality |
+| RAWG game database | ✅ Implemented | Rich metadata enrichment (20K req/month free) |
+| IGDB (Twitch) | ✅ Implemented | OAuth auto-refresh, Apicalypse queries |
+| HowLongToBeat | ✅ Implemented | Playtime data (main/extra/completionist) |
+| OpenCritic | ✅ Implemented | Critic scores + recommendation % |
+| Docker / docker-compose | ✅ Implemented | Multi-stage build, collector + web |
+| Discord / Telegram notifications | ✅ Implemented | Webhook alerts (spike, mention, digest) |
+| GitHub Actions CI/CD | ✅ Implemented | pytest + ruff on push, release automation |
+| Dark mode (desktop) | ✅ Implemented | QSS theme with toggle |
+| .claude agents (9 total) | ✅ Implemented | Specialized agents + 4 slash commands |
 
 ---
 
