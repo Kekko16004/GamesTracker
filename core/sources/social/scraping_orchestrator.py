@@ -251,6 +251,9 @@ class ScrapingOrchestrator:
         All results are deduplicated by ``post_url`` across all search terms and
         platforms before being returned.
 
+        TikTok receives the aliases as extra kwargs so it can try them as
+        potential TikTok handles for profile scraping.
+
         Individual scraper failures do not abort the others.
 
         Args:
@@ -263,14 +266,17 @@ class ScrapingOrchestrator:
             Deduplicated list of ``SocialPost`` from all platforms and terms.
         """
         search_terms = [game_title] + list(aliases or [])
+        alias_list = list(aliases or [])
 
         # Build tasks for every (search_term, scraper) combination and run all
         # concurrently.  This keeps the same total wall-clock time regardless of
         # how many aliases are present.
         tasks: list = []
         for term in search_terms:
+            # TikTok gets aliases for profile handle discovery.
+            tiktok_kwargs: dict = {"aliases": alias_list}
             tasks.extend([
-                self._safe_scrape(self._tiktok, term),
+                self._safe_scrape(self._tiktok, term, **tiktok_kwargs),
                 self._safe_scrape(self._instagram, term),
                 self._safe_scrape(self._x, term),
                 self._safe_scrape(self._reddit, term),
@@ -298,14 +304,17 @@ class ScrapingOrchestrator:
         return unique
 
     @staticmethod
-    async def _safe_scrape(scraper, game_title: str) -> list[SocialPost]:
+    async def _safe_scrape(
+        scraper, game_title: str, **kwargs
+    ) -> list[SocialPost]:
         """Runs a scraper, catching all exceptions to ensure resilience.
 
+        Passes through any extra kwargs to the scraper's ``scrape()`` method.
         Returns empty list on any error (the scraper's own ``scrape`` method
         already handles most errors; this is a last safety net).
         """
         try:
-            return await scraper.scrape(game_title)
+            return await scraper.scrape(game_title, **kwargs)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "[orchestrator] Scraper %r failed for %r: %s",
