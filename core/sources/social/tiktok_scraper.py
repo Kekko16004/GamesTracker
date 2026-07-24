@@ -37,12 +37,19 @@ _TAG_BASE_URL = "https://www.tiktok.com/tag"
 _DEFAULT_HASHTAGS: list[str] = ["indiegame", "gamedev", "indiegames"]
 
 # Regex patterns to extract video metrics from TikTok's public page HTML.
-# TikTok embeds SIGI_STATE / __NEXT_DATA__ JSON blobs in <script> tags.
+# TikTok changed its data embedding multiple times:
+# - Pre-2024: SIGI_STATE
+# - 2024: __NEXT_DATA__
+# - 2025+: __UNIVERSAL_DATA_FOR_REHYDRATION__
 _NEXT_DATA_RE = re.compile(
     r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.DOTALL
 )
 _SIGI_STATE_RE = re.compile(
     r'<script[^>]*>\s*window\[(?:"SIGI_STATE"|\'SIGI_STATE\')\]\s*=\s*(\{.*?\});\s*</script>',
+    re.DOTALL,
+)
+_UNIVERSAL_DATA_RE = re.compile(
+    r'<script[^>]*id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)</script>',
     re.DOTALL,
 )
 
@@ -85,7 +92,6 @@ def _parse_next_data(html: str) -> list[dict]:
         return []
     try:
         data = json.loads(match.group(1))
-        # Path: props.pageProps.items or similar.
         page_props: dict = (
             data.get("props", {}).get("pageProps", {})
         )
@@ -93,6 +99,61 @@ def _parse_next_data(html: str) -> list[dict]:
         if isinstance(items, list):
             return items
         return []
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return []
+
+
+def _parse_universal_data(html: str) -> list[dict]:
+    """Extract video items from ``__UNIVERSAL_DATA_FOR_REHYDRATION__`` blob.
+
+    This is TikTok's 2025+ data format. The structure typically contains
+    search results under various nested paths.
+    """
+    match = _UNIVERSAL_DATA_RE.search(html)
+    if not match:
+        return []
+    try:
+        data = json.loads(match.group(1))
+        items: list[dict] = []
+
+        # Walk the data structure looking for video items.
+        # Common paths in 2025-2026 TikTok:
+        # - __DEFAULT_SCOPE__["webapp.search"]["searchResult"]["item_list"]
+        # - __DEFAULT_SCOPE__["webapp.video-detail"]["itemInfo"]["itemStruct"]
+        default_scope = data.get("__DEFAULT_SCOPE__", {})
+
+        # Search results page
+        search_data = default_scope.get("webapp.search", {})
+        if isinstance(search_data, dict):
+            # Try multiple known paths
+            for key in ["searchResult", "data"]:
+                result = search_data.get(key, {})
+                if isinstance(result, dict):
+                    item_list = result.get("item_list", result.get("items", []))
+                    if isinstance(item_list, list):
+                        items.extend(item_list)
+
+        # Also check for video detail page
+        video_detail = default_scope.get("webapp.video-detail", {})
+        if isinstance(video_detail, dict):
+            item_info = video_detail.get("itemInfo", {})
+            if isinstance(item_info, dict):
+                struct = item_info.get("itemStruct")
+                if isinstance(struct, dict):
+                    items.append(struct)
+
+        # Fallback: walk all values looking for item_list arrays
+        if not items:
+            for scope_key, scope_val in default_scope.items():
+                if not isinstance(scope_val, dict):
+                    continue
+                for k, v in scope_val.items():
+                    if isinstance(v, dict):
+                        il = v.get("item_list", v.get("items", []))
+                        if isinstance(il, list) and il:
+                            items.extend(il)
+
+        return items
     except (json.JSONDecodeError, AttributeError, TypeError):
         return []
 
@@ -210,6 +271,10 @@ class TikTokScraper(BaseScraper):
             tag_posts = await self._scrape_hashtag(tag, game_title)
             posts.extend(tag_posts)
 
+        # 3. TikTok SEARCH page scraping (most reliable in 2025+).
+        search_posts = await self._scrape_search(game_title)
+        posts.extend(search_posts)
+
         # Dedup by post_url.
         seen: set[str] = set()
         unique: list[SocialPost] = []
@@ -228,6 +293,52 @@ class TikTokScraper(BaseScraper):
             len(unique),
         )
         return unique
+
+    # -- search page scraping ------------------------------------------------
+
+    async def _scrape_search(self, game_title: str) -> list[SocialPost]:
+        """Scrapes TikTok's search results page for videos about the game.
+
+        Uses ``__UNIVERSAL_DATA_FOR_REHYDRATION__`` blob (2025+ format).
+        This is the most reliable approach as of 2026.
+        """
+        import urllib.parse as _up
+
+        url = f"https://www.tiktok.com/search?q={_up.quote(game_title + ' game')}"
+        try:
+            response = await self._get(url)
+            if not response or response.status_code != 200:
+                return []
+            html = response.text
+        except Exception as exc:
+            logger.debug("[tiktok] search page failed for %r: %s", game_title, exc)
+            return []
+
+        # Parse the 2025+ universal data format
+        items = _parse_universal_data(html) or _parse_next_data(html)
+
+        posts: list[SocialPost] = []
+        title_lower = game_title.lower()
+        for item in items:
+            try:
+                post = _item_to_social_post(item)
+                if post is None:
+                    continue
+                # Keep posts that mention the game in title/description
+                desc = (post.title or "").lower()
+                if title_lower in desc or game_title.lower().replace(" ", "") in desc:
+                    posts.append(post)
+            except Exception:
+                pass
+
+        # OG fallback if no structured data
+        if not items:
+            og_post = _og_fallback_post(html, url)
+            if og_post:
+                posts.append(og_post)
+
+        logger.debug("[tiktok] search %r -> %d posts", game_title, len(posts))
+        return posts
 
     # -- oembed --------------------------------------------------------------
 
@@ -297,8 +408,13 @@ class TikTokScraper(BaseScraper):
 
         posts: list[SocialPost] = []
 
-        # Try SIGI_STATE first (older TikTok rendering), then __NEXT_DATA__.
-        items = _parse_sigi_state(html) or _parse_next_data(html)
+        # Try all known data formats (newest first):
+        # 2025+: __UNIVERSAL_DATA_FOR_REHYDRATION__
+        # 2024: __NEXT_DATA__
+        # Pre-2024: SIGI_STATE
+        items = (_parse_universal_data(html)
+                 or _parse_next_data(html)
+                 or _parse_sigi_state(html))
 
         title_lower = game_title.lower()
         for item in items:
