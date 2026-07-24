@@ -144,29 +144,29 @@ class RedditNoAuthScraper(BaseScraper):
         self._search_limit = min(max(1, search_limit), 100)  # Reddit max is 100.
 
     async def scrape(self, game_title: str, **kwargs) -> list[SocialPost]:
-        """Scrapes Reddit for posts mentioning ``game_title`` across subreddits.
+        """Scrapes Reddit for posts mentioning ``game_title``.
 
-        Searches each configured subreddit using the public JSON search API,
-        then deduplicates by ``post_url`` (preserving first occurrence order).
-
-        Args:
-            game_title: Name of the indie game to search.
-            include_global: (kwarg bool) Also search ``r/all`` (default False
-                to avoid too many requests; PRAW client handles global search).
+        Strategy (optimized for rate limits):
+        1. ONE global search via RSS (catches all subreddits at once)
+        2. If global search fails, try the first 2 gaming subreddits
+        This keeps requests to 1-3 per game instead of 6+.
 
         Returns:
             Deduplicated list of ``SocialPost``; empty on failure.
         """
-        include_global: bool = bool(kwargs.get("include_global", False))
-
         all_posts: list[SocialPost] = []
-        subreddits = list(self._subreddits)
-        if include_global and "all" not in [s.lower() for s in subreddits]:
-            subreddits.append("all")
 
-        for subreddit in subreddits:
-            sub_posts = await self._search_subreddit(subreddit, game_title)
-            all_posts.extend(sub_posts)
+        # Primary: global search (1 request, covers all subreddits)
+        global_posts = await self._search_subreddit("all", game_title)
+        all_posts.extend(global_posts)
+
+        # Fallback: try 2 key subreddits if global found nothing
+        if not global_posts:
+            for sub in self._subreddits[:2]:
+                sub_posts = await self._search_subreddit(sub, game_title)
+                all_posts.extend(sub_posts)
+                if sub_posts:
+                    break  # got results, stop
 
         # Dedup by post_url, preserving order (first occurrence wins).
         seen: set[str] = set()
@@ -189,15 +189,109 @@ class RedditNoAuthScraper(BaseScraper):
     async def _search_subreddit(
         self, subreddit: str, game_title: str
     ) -> list[SocialPost]:
-        """Searches a single subreddit via the Reddit public JSON API.
+        """Searches a single subreddit via Reddit RSS feed (Atom XML).
 
-        Args:
-            subreddit: Subreddit name (without ``r/``).
-            game_title: Search query (will be quoted for exact matching).
+        Reddit's JSON API now returns 403 for unauthenticated requests,
+        but the RSS/Atom feed endpoints still work reliably:
 
-        Returns:
-            List of ``SocialPost``; empty on error.
+            GET https://www.reddit.com/r/{subreddit}/search.rss
+                ?q={query}&sort=new&limit=25
+
+        Falls back to the global search RSS if subreddit-specific fails.
         """
+        import xml.etree.ElementTree as ET
+
+        # Use RSS feed instead of JSON API (JSON returns 403 since ~2025)
+        if subreddit.lower() == "all":
+            url = f"{_REDDIT_API_BASE}/search.rss"
+        else:
+            url = f"{_REDDIT_API_BASE}/r/{subreddit}/search.rss"
+        params = {
+            "q": game_title,
+            "sort": "new",
+            "limit": self._search_limit,
+            "restrict_sr": "on",
+        }
+        extra_headers = {
+            "User-Agent": _REDDIT_UA,
+            "Accept": "application/atom+xml, application/rss+xml, */*",
+        }
+
+        try:
+            resp = await self._get(url, params=params, extra_headers=extra_headers)
+            if not resp or not hasattr(resp, 'text') or not resp.text:
+                # Fallback: try global search
+                url = f"{_REDDIT_API_BASE}/search.rss"
+                params.pop("restrict_sr", None)
+                resp = await self._get(url, params=params, extra_headers=extra_headers)
+                if not resp or not hasattr(resp, 'text'):
+                    return []
+
+            # Parse Atom XML feed
+            try:
+                root = ET.fromstring(resp.text)
+            except ET.ParseError:
+                logger.debug("[reddit-noauth] Failed to parse RSS from r/%s", subreddit)
+                return []
+
+            ns = {'atom': 'http://www.w3.org/2005/Atom'}
+            entries = root.findall('atom:entry', ns)
+
+            posts: list[SocialPost] = []
+            for entry in entries:
+                title_el = entry.find('atom:title', ns)
+                link_el = entry.find('atom:link', ns)
+                updated_el = entry.find('atom:updated', ns)
+                author_el = entry.find('atom:author/atom:name', ns)
+                content_el = entry.find('atom:content', ns)
+
+                title = title_el.text if title_el is not None else None
+                link = link_el.get('href', '') if link_el is not None else ''
+                author = author_el.text if author_el is not None else None
+
+                if not link or not title:
+                    continue
+
+                # Filter: only keep posts that actually mention the game
+                if game_title.lower() not in (title or '').lower():
+                    # Check content too
+                    content_text = content_el.text if content_el is not None else ''
+                    if game_title.lower() not in (content_text or '').lower():
+                        continue
+
+                posted_at = None
+                if updated_el is not None and updated_el.text:
+                    try:
+                        posted_at = datetime.fromisoformat(
+                            updated_el.text.replace('Z', '+00:00')
+                        )
+                    except (ValueError, TypeError):
+                        pass
+
+                posts.append(SocialPost(
+                    platform=PLATFORM,
+                    post_url=link,
+                    author=author.replace('/u/', '') if author else None,
+                    title=title[:500] if title else None,
+                    views=None,
+                    likes=None,  # RSS doesn't include scores
+                    comments=None,
+                    shares=None,
+                    posted_at=posted_at,
+                    collected_at=datetime.utcnow(),
+                    subreddit=subreddit,
+                ))
+
+            return posts
+
+        except Exception as exc:
+            logger.debug("[reddit-noauth] RSS search failed for r/%s: %s", subreddit, exc)
+            return []
+
+    async def _search_subreddit_json_DEPRECATED(
+        self, subreddit: str, game_title: str
+    ) -> list[SocialPost]:
+        """DEPRECATED: JSON API returns 403 since ~2025. Kept for reference."""
         url = f"{_REDDIT_API_BASE}/r/{subreddit}/search.json"
         params = {
             "q": f'"{game_title}"',
@@ -206,7 +300,6 @@ class RedditNoAuthScraper(BaseScraper):
             "restrict_sr": "on",
             "type": "link",
         }
-        # Reddit requires a descriptive User-Agent; override the rotated UA.
         extra_headers = {
             "User-Agent": _REDDIT_UA,
             "Accept": "application/json",
