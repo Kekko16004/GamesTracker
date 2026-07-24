@@ -1,15 +1,20 @@
-"""TikTok async scraper — oembed API + public web scraping (no auth).
+"""TikTok async scraper — oembed API + profile stats + public web scraping.
 
-Strategy:
-1. **oembed API** (``https://www.tiktok.com/oembed?url=...``): retrieves
+Strategy (2026 update):
+1. **Profile scraping**: GET ``https://www.tiktok.com/@{handle}`` and parse
+   ``__UNIVERSAL_DATA_FOR_REHYDRATION__`` for user stats (followers, video
+   count, heart count).  This works reliably because TikTok server-renders
+   the profile stats in the initial HTML payload.
+2. **oembed API** (``https://www.tiktok.com/oembed?url=...``): retrieves
    structured metadata for a known post URL (title, author, thumbnail).
-2. **Public hashtag scraping**: GET ``https://www.tiktok.com/tag/<hashtag>``
+3. **Public hashtag scraping**: GET ``https://www.tiktok.com/tag/<hashtag>``
    and parse video metadata from ``<script>`` / Open Graph meta tags.
    Hashtags searched: ``#indiegame``, ``#gamedev``, plus a sanitised version
-   of the game title.
+   of the game title.  (Low yield since TikTok no longer includes video
+   lists in server-rendered HTML, but kept as a bonus source.)
 
 No login, cookies, or API keys required.
-Rate limit: 30 requests/minute (conservative — TikTok is aggressive on rate
+Rate limit: 30 requests/minute (conservative -- TikTok is aggressive on rate
 limiting public endpoints).
 
 Graceful degradation: every method is wrapped so errors only produce a log
@@ -241,13 +246,17 @@ class TikTokScraper(BaseScraper):
     async def scrape(self, game_title: str, **kwargs) -> list[SocialPost]:
         """Scrapes TikTok for posts related to ``game_title``.
 
-        Searches the default indiegame/gamedev hashtags plus one derived from
-        the game title. Uses oembed when a direct URL is available via kwargs.
+        Strategy (2026):
+        1. Enrich a known post URL via oembed (if provided).
+        2. Profile scraping -- get user stats from developer's TikTok handle.
+        3. Limited hashtag scraping (2 tags max) as a bonus source.
 
         Args:
             game_title: Name of the indie game to search.
-            post_url: (kwarg) If provided, also calls oembed for this specific
-                URL to enrich metadata.
+            post_url: (kwarg) If provided, calls oembed for this URL.
+            handle: (kwarg) TikTok handle to scrape profile stats from.
+            aliases: (kwarg) List of alternative names (developer, publisher)
+                to try as TikTok handles.
 
         Returns:
             Deduplicated list of ``SocialPost``; empty on failure.
@@ -261,19 +270,38 @@ class TikTokScraper(BaseScraper):
             if oembed_post:
                 posts.append(oembed_post)
 
-        # 2. Public hashtag scraping.
+        # 2. Profile scraping if handle is known (developer name as handle).
+        handle: Optional[str] = kwargs.get("handle")
+        if not handle:
+            # Derive a candidate handle from the game title.
+            handle = re.sub(r"[^a-zA-Z0-9_]", "", game_title.replace(" ", "_")).lower()
+
+        scraped_handles: set[str] = set()
+        if handle:
+            profile_posts = await self._scrape_profile(handle)
+            posts.extend(profile_posts)
+            scraped_handles.add(handle.lower())
+
+        # Also try developer/publisher names as handles (from aliases).
+        aliases: list[str] = kwargs.get("aliases", [])
+        for alias in aliases:
+            alias_handle = re.sub(
+                r"[^a-zA-Z0-9_]", "", alias.replace(" ", "_")
+            ).lower()
+            if alias_handle and alias_handle not in scraped_handles:
+                scraped_handles.add(alias_handle)
+                ap = await self._scrape_profile(alias_handle)
+                posts.extend(ap)
+
+        # 3. Limited hashtag scraping as bonus (2 tags max to avoid rate limits).
         hashtags = list(_DEFAULT_HASHTAGS) + list(self._extra_hashtags)
         game_tag = _sanitise_hashtag(game_title)
         if game_tag and game_tag not in hashtags:
             hashtags.append(game_tag)
 
-        for tag in hashtags:
+        for tag in hashtags[:2]:
             tag_posts = await self._scrape_hashtag(tag, game_title)
             posts.extend(tag_posts)
-
-        # 3. TikTok SEARCH page scraping (most reliable in 2025+).
-        search_posts = await self._scrape_search(game_title)
-        posts.extend(search_posts)
 
         # Dedup by post_url.
         seen: set[str] = set()
@@ -293,6 +321,106 @@ class TikTokScraper(BaseScraper):
             len(unique),
         )
         return unique
+
+    # -- profile scraping ----------------------------------------------------
+
+    async def _scrape_profile(self, handle: str) -> list[SocialPost]:
+        """Scrapes a TikTok user profile page for account-level stats.
+
+        The profile page includes ``__UNIVERSAL_DATA_FOR_REHYDRATION__`` with
+        ``webapp.user-detail`` containing: uniqueId, followers, videoCount,
+        heartCount.
+
+        We create ONE synthetic ``SocialPost`` representing the profile stats.
+        This is the most reliable TikTok data source in 2026 because the
+        profile stats are always server-rendered.
+
+        Args:
+            handle: TikTok username (without the ``@`` prefix).
+
+        Returns:
+            A list with one ``SocialPost`` on success, empty on failure.
+        """
+        url = f"https://www.tiktok.com/@{handle}"
+        try:
+            response = await self._get(url)
+            if not response or not hasattr(response, "text"):
+                return []
+            if hasattr(response, "status_code") and response.status_code != 200:
+                logger.debug(
+                    "[tiktok] Profile page for @%s returned HTTP %d",
+                    handle,
+                    response.status_code,
+                )
+                return []
+            html = response.text
+        except Exception as exc:
+            logger.debug("[tiktok] Profile fetch failed for @%s: %s", handle, exc)
+            return []
+
+        # Parse __UNIVERSAL_DATA_FOR_REHYDRATION__
+        match = _UNIVERSAL_DATA_RE.search(html)
+        if not match:
+            logger.debug(
+                "[tiktok] No __UNIVERSAL_DATA_FOR_REHYDRATION__ in @%s profile",
+                handle,
+            )
+            return []
+
+        try:
+            data = json.loads(match.group(1))
+        except (json.JSONDecodeError, TypeError):
+            logger.debug("[tiktok] Failed to parse profile JSON for @%s", handle)
+            return []
+
+        user_detail = data.get("__DEFAULT_SCOPE__", {}).get(
+            "webapp.user-detail", {}
+        )
+        user_info = user_detail.get("userInfo", {})
+        if not user_info:
+            logger.debug("[tiktok] No userInfo found in @%s profile data", handle)
+            return []
+
+        user = user_info.get("user", {})
+        stats = user_info.get("stats", {})
+
+        unique_id = user.get("uniqueId") or handle
+        follower_count = self._to_int(stats.get("followerCount"))
+        video_count = self._to_int(stats.get("videoCount"))
+        heart_count = self._to_int(stats.get("heartCount"))
+
+        title_parts = [f"TikTok @{unique_id}:"]
+        if follower_count is not None:
+            title_parts.append(f"{follower_count:,} followers")
+        if video_count is not None:
+            title_parts.append(f"{video_count:,} videos")
+        if heart_count is not None:
+            title_parts.append(f"{heart_count:,} likes")
+
+        title = " ".join(title_parts) if len(title_parts) > 1 else None
+
+        logger.info(
+            "[tiktok] Profile @%s: followers=%s, videos=%s, hearts=%s",
+            unique_id,
+            follower_count,
+            video_count,
+            heart_count,
+        )
+
+        return [
+            SocialPost(
+                platform=PLATFORM,
+                post_url=url,
+                author=str(unique_id),
+                title=title,
+                views=heart_count,  # total likes as engagement proxy
+                likes=follower_count,  # followers stored in likes field
+                comments=video_count,  # video count stored in comments field
+                shares=None,
+                posted_at=None,
+                collected_at=datetime.utcnow(),
+            )
+        ]
 
     # -- search page scraping ------------------------------------------------
 
