@@ -1,12 +1,15 @@
-"""X/Twitter async scraper — RSS bridge via Nitter + public page fallback.
+"""X/Twitter async scraper — RSS bridge via Nitter + fallback instances.
 
-Strategy:
+Strategy (2026 update):
 1. **Nitter RSS feed** (``https://<nitter_instance>/search/rss?q=<query>``):
    Nitter is an open-source Twitter frontend that exposes RSS feeds of search
    results without requiring a Twitter API key. The Nitter instance URL is
    configurable (``NITTER_INSTANCE`` env var, default ``nitter.privacydev.net``).
-2. **Fallback**: if the RSS feed is unavailable, attempts to scrape the Nitter
-   HTML search results page.
+2. **Fallback instances**: if the primary Nitter instance fails (403/timeout),
+   tries 2 additional public Nitter instances before giving up.
+3. **Synthetic post**: when ALL Nitter instances are down (which is common in
+   2026 as most public instances return 403), creates a synthetic post
+   containing a direct X search URL so the user can check manually.
 
 RSS item parsing extracts: tweet text (title), author, timestamp, and where
 available: likes, retweets, and replies from the RSS description HTML.
@@ -14,8 +17,7 @@ available: likes, retweets, and replies from the RSS description HTML.
 Rate limit: 15 requests/minute (conservative; Nitter instances vary).
 
 Graceful degradation: every method is wrapped so errors only produce a log
-entry and an empty list, never a crash. If all Nitter instances are down the
-scraper returns an empty list with a clear log message.
+entry and an empty list, never a crash.
 """
 
 from __future__ import annotations
@@ -35,8 +37,16 @@ logger = logging.getLogger(__name__)
 
 PLATFORM = "twitter"
 
-# Default Nitter instance — configurable via NITTER_INSTANCE env var.
+# Default Nitter instance -- configurable via NITTER_INSTANCE env var.
 DEFAULT_NITTER_INSTANCE = "nitter.privacydev.net"
+
+# Fallback Nitter instances to try when the primary fails.
+# Most public Nitter instances return 403 as of 2026, but self-hosted
+# instances or newer forks may still work.
+_FALLBACK_NITTER_INSTANCES: list[str] = [
+    "nitter.net",
+    "nitter.cz",
+]
 
 # RSS namespaces used by Nitter / Atom.
 _RSS_ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
@@ -165,8 +175,12 @@ class XScraper(BaseScraper):
     async def scrape(self, game_title: str, **kwargs) -> list[SocialPost]:
         """Scrapes X/Twitter for posts related to ``game_title`` via Nitter RSS.
 
-        Searches for the game title as a query on the configured Nitter
-        instance. Falls back to HTML scraping if the RSS endpoint fails.
+        Strategy (2026):
+        1. Try RSS feed on the configured (primary) Nitter instance.
+        2. Try HTML fallback on the primary instance.
+        3. Try 2 additional fallback Nitter instances (RSS + HTML each).
+        4. If ALL instances fail, create a synthetic post with a direct
+           X search URL so the user can check manually.
 
         Args:
             game_title: Name of the indie game to search.
@@ -181,14 +195,71 @@ class XScraper(BaseScraper):
         # Build search query: exact title + indiegame filter.
         query = f'"{game_title}" (#indiegame OR #gamedev OR indie game)'
 
-        # 1. Try RSS feed.
+        # 1. Try the configured (primary) Nitter instance.
         rss_posts = await self._fetch_rss(query)
         posts.extend(rss_posts)
 
-        # 2. Fallback to HTML scraping if RSS returned nothing.
         if not posts:
             html_posts = await self._scrape_html(query)
             posts.extend(html_posts)
+
+        # 2. Try fallback Nitter instances if the primary failed.
+        if not posts:
+            original_instance = self._nitter_instance
+            for fallback in _FALLBACK_NITTER_INSTANCES:
+                if fallback == original_instance:
+                    continue
+                logger.info(
+                    "[twitter] Primary Nitter instance failed, trying fallback: %s",
+                    fallback,
+                )
+                self._nitter_instance = fallback
+                try:
+                    rss_posts = await self._fetch_rss(query)
+                    posts.extend(rss_posts)
+                    if not posts:
+                        html_posts = await self._scrape_html(query)
+                        posts.extend(html_posts)
+                    if posts:
+                        break  # got results from this fallback
+                except Exception as exc:
+                    logger.debug(
+                        "[twitter] Fallback %s also failed: %s", fallback, exc
+                    )
+            # Restore original instance.
+            self._nitter_instance = original_instance
+
+        # 3. If ALL Nitter instances failed, create a synthetic post
+        #    with an X search URL so the user can check manually.
+        if not posts:
+            logger.info(
+                "[twitter] All Nitter instances returned 0 results for %r. "
+                "X/Twitter scraping requires a working Nitter instance or "
+                "direct API access. Creating synthetic search link.",
+                game_title,
+            )
+            x_search_url = (
+                f"https://x.com/search?q={quote_plus(game_title + ' indiegame')}"
+                f"&src=typed_query&f=live"
+            )
+            posts.append(
+                SocialPost(
+                    platform=PLATFORM,
+                    post_url=x_search_url,
+                    author=None,
+                    title=(
+                        f"[X Search] No Nitter instances available. "
+                        f"Search X manually for: {game_title}"
+                    ),
+                    views=None,
+                    likes=None,
+                    comments=None,
+                    shares=None,
+                    posted_at=None,
+                    collected_at=datetime.utcnow(),
+                    extra={"synthetic": True, "reason": "all_nitter_instances_down"},
+                )
+            )
 
         # Dedup by post_url.
         seen: set[str] = set()
@@ -248,13 +319,21 @@ class XScraper(BaseScraper):
     def _parse_rss_content(self, xml_text: str) -> list[SocialPost]:
         """Parses an RSS XML string into a list of ``SocialPost``.
 
-        Returns empty list on XML parse error.
+        Returns empty list on XML parse error, empty input, or any other
+        issue.  Handles both RSS 2.0 ``<item>`` and Atom ``<entry>`` formats.
         """
+        if not xml_text or not xml_text.strip():
+            logger.debug("[twitter] Empty RSS content received")
+            return []
+
         posts: list[SocialPost] = []
         try:
             root = ET.fromstring(xml_text)
         except ET.ParseError as exc:
-            logger.warning("[twitter] RSS XML parse error: %s", exc)
+            logger.debug("[twitter] RSS XML parse error: %s", exc)
+            return []
+        except Exception as exc:
+            logger.debug("[twitter] Unexpected RSS parse error: %s", exc)
             return []
 
         channel = root.find("channel")
@@ -262,9 +341,12 @@ class XScraper(BaseScraper):
             # Atom format fallback.
             items = root.findall("{http://www.w3.org/2005/Atom}entry")
             for entry in items:
-                post = self._atom_entry_to_post(entry)
-                if post:
-                    posts.append(post)
+                try:
+                    post = self._atom_entry_to_post(entry)
+                    if post:
+                        posts.append(post)
+                except Exception as exc:
+                    logger.debug("[twitter] Skipping malformed Atom entry: %s", exc)
             return posts
 
         for item in channel.findall("item"):
